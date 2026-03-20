@@ -7,6 +7,7 @@ import numpy as np
 import torch
 from scipy.io import wavfile
 from scipy.signal import correlate
+from scipy.signal import resample_poly
 from transformers import AutoProcessor, MusicgenForConditionalGeneration
 
 try:
@@ -31,10 +32,39 @@ def load_musicgen(model_id: str = MODEL_ID, device: str | None = None):
     return processor, model, resolved_device
 
 
-def build_output_path(output_dir: Path = OUTPUT_DIR) -> Path:
+def build_output_path(output_dir: Path = OUTPUT_DIR, prefix: str = "musicgen") -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return output_dir / f"musicgen_{timestamp}.wav"
+    return output_dir / f"{prefix}_{timestamp}.wav"
+
+
+def _load_conditioning_audio(wav_path: Path, target_sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    if not wav_path.exists():
+        raise FileNotFoundError(f"Guide audio file not found: {wav_path}")
+
+    source_sr, waveform = wavfile.read(str(wav_path))
+    if waveform.ndim > 1:
+        waveform = np.mean(waveform, axis=1)
+
+    if waveform.dtype == np.int16:
+        mono = waveform.astype(np.float32) / 32768.0
+    elif waveform.dtype == np.int32:
+        mono = waveform.astype(np.float32) / 2147483648.0
+    elif waveform.dtype == np.uint8:
+        mono = (waveform.astype(np.float32) - 128.0) / 128.0
+    else:
+        mono = waveform.astype(np.float32)
+
+    if source_sr != target_sample_rate:
+        mono = resample_poly(mono, target_sample_rate, source_sr).astype(np.float32)
+
+    peak = float(np.max(np.abs(mono))) if mono.size else 0.0
+    if peak > 1.0:
+        mono = mono / peak
+    elif peak > 0.0:
+        mono = mono / peak
+
+    return mono
 
 
 def generate_music_clip(
@@ -43,6 +73,7 @@ def generate_music_clip(
     model_id: str = MODEL_ID,
     output_dir: Path = OUTPUT_DIR,
     seed: int | None = None,
+    guide_audio_wav: Path | None = None,
 ) -> Path:
     """Generate a short clip from text and save it as WAV."""
     if not prompt or not prompt.strip():
@@ -53,7 +84,21 @@ def generate_music_clip(
     processor, model, device = load_musicgen(model_id=model_id)
     max_new_tokens = max(1, int(duration_seconds * 50))
 
-    inputs = processor(text=[prompt], padding=True, return_tensors="pt")
+    try:
+        if guide_audio_wav is None:
+            inputs = processor(text=[prompt], padding=True, return_tensors="pt")
+        else:
+            guide_audio = _load_conditioning_audio(guide_audio_wav, target_sample_rate=SAMPLE_RATE)
+            inputs = processor(
+                text=[prompt],
+                audio=guide_audio,
+                sampling_rate=SAMPLE_RATE,
+                padding=True,
+                return_tensors="pt",
+            )
+    except Exception as exc:
+        raise RuntimeError(f"Guide-audio preprocessing failed: {exc}") from exc
+
     inputs = {key: value.to(device) for key, value in inputs.items()}
 
     if seed is not None:
@@ -61,15 +106,24 @@ def generate_music_clip(
         if device == "cuda":
             torch.cuda.manual_seed_all(seed)
 
-    with torch.no_grad():
-        audio_values = model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=True)
+    try:
+        with torch.no_grad():
+            audio_values = model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=True)
+    except Exception as exc:
+        if guide_audio_wav is not None:
+            raise RuntimeError(
+                f"Guide-audio conditioning failed with current Transformers interface: {exc}. "
+                "No text-only fallback was executed."
+            ) from exc
+        raise
 
     sample_rate = getattr(model.config.audio_encoder, "sampling_rate", SAMPLE_RATE)
     waveform = audio_values[0].detach().cpu().numpy().squeeze()
     waveform = np.clip(waveform, -1.0, 1.0)
     waveform_int16 = (waveform * 32767).astype(np.int16)
 
-    output_path = build_output_path(output_dir=output_dir).resolve()
+    output_prefix = "musicgen_guided" if guide_audio_wav is not None else "musicgen"
+    output_path = build_output_path(output_dir=output_dir, prefix=output_prefix).resolve()
     wavfile.write(str(output_path), sample_rate, waveform_int16)
     return output_path
 

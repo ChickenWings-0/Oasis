@@ -309,3 +309,58 @@ def save_melody_events_midi(
 
     mid.save(str(output_path))
     return output_path
+
+
+def render_melody_guide_wav(
+    events: list[dict[str, object]],
+    output_path: Path,
+    sample_rate: int = 32000,
+    amplitude: float = 0.2,
+) -> Path:
+    """Render a simple sine-wave guide track from melody events."""
+    if sample_rate <= 0:
+        raise ValueError("sample_rate must be > 0")
+    if amplitude <= 0:
+        raise ValueError("amplitude must be > 0")
+
+    if not events:
+        raise ValueError("No melody events to render.")
+
+    end_time = max(float(event["end_sec"]) for event in events)
+    total_samples = max(1, int(np.ceil(end_time * sample_rate)))
+    guide = np.zeros(total_samples, dtype=np.float32)
+
+    fade_samples = max(1, int(0.005 * sample_rate))
+
+    for event in events:
+        start_sec = max(0.0, float(event["start_sec"]))
+        end_sec = max(start_sec, float(event["end_sec"]))
+        midi_note = int(event["midi"])
+
+        start_idx = int(round(start_sec * sample_rate))
+        end_idx = int(round(end_sec * sample_rate))
+        if end_idx <= start_idx:
+            continue
+
+        length = end_idx - start_idx
+        t = np.arange(length, dtype=np.float32) / float(sample_rate)
+        freq = 440.0 * (2.0 ** ((midi_note - 69) / 12.0))
+        tone = np.sin(2.0 * np.pi * freq * t).astype(np.float32)
+
+        fade_len = min(fade_samples, length // 2)
+        if fade_len > 0:
+            fade_in = np.linspace(0.0, 1.0, fade_len, dtype=np.float32)
+            fade_out = np.linspace(1.0, 0.0, fade_len, dtype=np.float32)
+            tone[:fade_len] *= fade_in
+            tone[-fade_len:] *= fade_out
+
+        guide[start_idx:end_idx] += amplitude * tone
+
+    peak = float(np.max(np.abs(guide))) if guide.size else 0.0
+    if peak > 1.0:
+        guide = guide / peak
+
+    wav_int16 = (np.clip(guide, -1.0, 1.0) * 32767).astype(np.int16)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    wavfile.write(str(output_path), sample_rate, wav_int16)
+    return output_path

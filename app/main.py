@@ -9,6 +9,7 @@ try:
     from app.humming import (
         extract_melody_events,
         preprocess_humming_wav,
+        render_melody_guide_wav,
         save_melody_events_json,
         save_melody_events_midi,
     )
@@ -18,44 +19,69 @@ except ModuleNotFoundError:
     from humming import (
         extract_melody_events,
         preprocess_humming_wav,
+        render_melody_guide_wav,
         save_melody_events_json,
         save_melody_events_midi,
     )
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Offline local text-to-music prototype")
+    parser = argparse.ArgumentParser(
+        description="Offline local text-to-music prototype (text generation + humming analysis)."
+    )
     parser.add_argument(
         "--prompt",
         type=str,
         default="Lo-fi chill beat with soft piano and warm bass, relaxing nighttime mood",
-        help="Text prompt for generation",
+        help="Text prompt used in text-generation mode.",
     )
-    parser.add_argument("--duration", type=int, default=8, help="Clip duration in seconds")
-    parser.add_argument("--seed", type=int, default=None, help="Optional random seed")
+    parser.add_argument(
+        "--duration",
+        type=int,
+        default=8,
+        help="Target generated clip duration in seconds (text-generation mode).",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Optional generation seed for repeatable sampling behavior.",
+    )
+    parser.add_argument(
+        "--guide-audio-wav",
+        type=str,
+        default=None,
+        help="Optional guide WAV for experimental guide-conditioned generation (A/B test).",
+    )
     parser.add_argument(
         "--humming-wav",
         type=str,
         default=None,
-        help="Optional path to a humming/whistling WAV for preprocessing.",
+        help="Input humming/whistling WAV path (enables humming-analysis mode).",
     )
     parser.add_argument(
         "--humming-target-sr",
         type=int,
         default=32000,
-        help="Target sample rate for humming preprocessing.",
+        help="Target sample rate for humming preprocessing/resampling.",
     )
     parser.add_argument(
         "--melody-out",
         type=str,
         default=None,
-        help="Optional JSON path to save extracted melody events.",
+        help="Optional output path to save extracted melody events as JSON.",
     )
     parser.add_argument(
         "--melody-midi-out",
         type=str,
         default=None,
-        help="Optional MIDI path to save extracted melody events as .mid.",
+        help="Optional output path to save extracted melody events as MIDI (.mid).",
+    )
+    parser.add_argument(
+        "--melody-guide-out",
+        type=str,
+        default=None,
+        help="Optional output path to save rendered guide melody WAV.",
     )
     return parser.parse_args()
 
@@ -66,6 +92,7 @@ def main() -> None:
 
     try:
         if args.humming_wav:
+            print("Mode: humming-analysis")
             humming_info = preprocess_humming_wav(
                 wav_path=Path(args.humming_wav),
                 target_sample_rate=args.humming_target_sr,
@@ -87,29 +114,57 @@ def main() -> None:
             for event in melody_events[:20]:
                 print(event)
 
+            output_json_path: Path | None = None
+            output_midi_path: Path | None = None
+            output_guide_path: Path | None = None
+
             if args.melody_out:
                 saved = save_melody_events_json(melody_events, Path(args.melody_out))
                 print(f"Saved melody events JSON: {saved.resolve()}")
+                output_json_path = saved.resolve()
 
             if args.melody_midi_out:
                 saved_midi = save_melody_events_midi(melody_events, Path(args.melody_midi_out))
                 print(f"Saved melody events MIDI: {saved_midi.resolve()}")
+                output_midi_path = saved_midi.resolve()
+
+            if args.melody_guide_out:
+                saved_guide = render_melody_guide_wav(
+                    events=melody_events,
+                    output_path=Path(args.melody_guide_out),
+                    sample_rate=humming_info["target_sample_rate"],
+                )
+                print(f"Saved melody guide WAV: {saved_guide.resolve()}")
+                output_guide_path = saved_guide.resolve()
+
+            print("Artifacts summary:")
+            print(f"- Output JSON: {output_json_path if output_json_path else 'not saved'}")
+            print(f"- Output MIDI: {output_midi_path if output_midi_path else 'not saved'}")
+            print(f"- Output Guide WAV: {output_guide_path if output_guide_path else 'not saved'}")
             return
 
+        print("Mode: text-generation")
         device = get_device()
         print(f"Model ID: {MODEL_ID}")
         print(f"Detected device: {device}")
         print(f"Prompt: {sample_prompt}")
         print(f"Duration (s): {args.duration}")
         print(f"Seed: {args.seed}")
+        print(f"Guide conditioning WAV: {args.guide_audio_wav}")
+        if args.guide_audio_wav:
+            print("Note: guide-audio conditioning is experimental; text-only remains the primary generation path.")
 
         output_path = generate_music_clip(
             prompt=sample_prompt,
             duration_seconds=args.duration,
             seed=args.seed,
+            guide_audio_wav=Path(args.guide_audio_wav) if args.guide_audio_wav else None,
         )
         print(f"Saved generated audio to: {output_path}")
         print(f"File exists: {output_path.exists()}")
+
+        print("Artifacts summary:")
+        print(f"- Output WAV: {output_path.resolve()}")
 
         analysis = analyze_audio_file(output_path)
         print(f"Estimated BPM: {analysis['bpm']}")
