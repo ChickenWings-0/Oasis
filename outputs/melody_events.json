@@ -1,0 +1,114 @@
+[
+  {
+    "start_sec": 0.14,
+    "end_sec": 1.1,
+    "duration_sec": 0.96,
+    "midi": 83,
+    "note": "B5",
+    "avg_freq_hz": 1000.0
+  },
+  {
+    "start_sec": 1.26,
+    "end_sec": 1.56,
+    "duration_sec": 0.3,
+    "midi": 69,
+    "note": "A4",
+    "avg_freq_hz": 439.5
+  },
+  {
+    "start_sec": 1.58,
+    "end_sec": 1.76,
+    "duration_sec": 0.18,
+    "midi": 72,
+    "note": "C5",
+    "avg_freq_hz": 524.59
+  },
+  {
+    "start_sec": 1.78,
+    "end_sec": 2.12,
+    "duration_sec": 0.34,
+    "midi": 83,
+    "note": "B5",
+    "avg_freq_hz": 1000.0
+  },
+  {
+    "start_sec": 2.26,
+    "end_sec": 2.46,
+    "duration_sec": 0.2,
+    "midi": 83,
+    "note": "B5",
+    "avg_freq_hz": 997.25
+  },
+  {
+    "start_sec": 2.58,
+    "end_sec": 2.7,
+    "duration_sec": 0.12,
+    "midi": 69,
+    "note": "A4",
+    "avg_freq_hz": 442.72
+  },
+  {
+    "start_sec": 2.74,
+    "end_sec": 3.06,
+    "duration_sec": 0.32,
+    "midi": 67,
+    "note": "G4",
+    "avg_freq_hz": 395.64
+  },
+  {
+    "start_sec": 3.1,
+    "end_sec": 3.28,
+    "duration_sec": 0.18,
+    "midi": 83,
+    "note": "B5",
+    "avg_freq_hz": 1000.0
+  },
+  {
+    "start_sec": 3.46,
+    "end_sec": 4.04,
+    "duration_sec": 0.58,
+    "midi": 83,
+    "note": "B5",
+    "avg_freq_hz": 996.97
+  },
+  {
+    "start_sec": 4.08,
+    "end_sec": 4.2,
+    "duration_sec": 0.12,
+    "midi": 67,
+    "note": "G4",
+    "avg_freq_hz": 396.47
+  },
+  {
+    "start_sec": 4.36,
+    "end_sec": 4.6,
+    "duration_sec": 0.24,
+    "midi": 69,
+    "note": "A4",
+    "avg_freq_hz": 438.36
+  },
+  {
+    "start_sec": 4.96,
+    "end_sec": 5.28,
+    "duration_sec": 0.32,
+    "midi": 83,
+    "note": "B5",
+    "avg_freq_hz": 1000.0
+  },
+  {
+    "start_sec": 5.36,
+    "end_sec": 6.62,
+    "duration_sec": 1.26,
+    "midi": 83,
+    "note": "B5",
+    "avg_freq_hz": 995.74
+  },
+  {
+    "start_sec": 6.86,
+    "end_sec": 7.08,
+    "duration_sec": 0.22,
+    "midi": 83,
+    "note": "B5",
+    "avg_freq_hz": 1000.0
+  }
+]
