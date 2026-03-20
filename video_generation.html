@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Video Generator - OASIS</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 900px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 1.1em;
+            font-weight: 300;
+        }
+
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin-bottom: 30px;
+        }
+
+        .form-section {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            color: #333;
+            font-weight: 600;
+            font-size: 0.95em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        input[type="text"],
+        textarea,
+        select {
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            font-family: inherit;
+            transition: all 0.3s ease;
+        }
+
+        input[type="text"]:focus,
+        textarea:focus,
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+            font-family: inherit;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #e0e0e0;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            background: #764ba2;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            border: none;
+            transition: background 0.3s ease;
+        }
+
+        input[type="range"]::-moz-range-thumb:hover {
+            background: #764ba2;
+        }
+
+        .range-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .duration-value {
+            font-weight: 600;
+            color: #667eea;
+            font-size: 1.1em;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        button {
+            flex: 1;
+            padding: 14px 28px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-generate {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-generate:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-generate:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-clear {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-clear:hover {
+            background: #e0e0e0;
+        }
+
+        .preview-section {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .status-box {
+            padding: 16px;
+            border-radius: 8px;
+            display: none;
+            align-items: center;
+            gap: 12px;
+            font-weight: 500;
+        }
+
+        .status-box.show {
+            display: flex;
+        }
+
+        .status-box.info {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .status-box.success {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+
+        .status-box.error {
+            background: #ffebee;
+            color: #d32f2f;
+        }
+
+        .spinner {
+            width: 18px;
+            height: 18px;
+            border: 3px solid rgba(0, 0, 0, 0.2);
+            border-radius: 50%;
+            border-top-color: currentColor;
+            animation: spin 0.6s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .video-container {
+            background: #f5f5f5;
+            border-radius: 12px;
+            overflow: hidden;
+            display: none;
+        }
+
+        .video-container.show {
+            display: block;
+        }
+
+        .video-container video {
+            width: 100%;
+            height: auto;
+            display: block;
+            background: #000;
+        }
+
+        .video-info {
+            padding: 16px;
+            background: #f9f9f9;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .video-info p {
+            color: #666;
+            font-size: 0.9em;
+            margin: 4px 0;
+        }
+
+        .video-info strong {
+            color: #333;
+        }
+
+        .info-section {
+            background: #f9f9f9;
+            padding: 16px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            color: #666;
+            line-height: 1.6;
+        }
+
+        .info-section h3 {
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 0.95em;
+        }
+
+        .model-description {
+            font-size: 0.85em;
+            color: #999;
+            margin-top: 4px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .content {
+                grid-template-columns: 1fr;
+                gap: 30px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎬 AI Video Generator</h1>
+            <p class="subtitle">OASIS - Create videos from text prompts</p>
+        </header>
+
+        <div class="content">
+            <!-- Form Section -->
+            <div class="form-section">
+                <div class="form-group">
+                    <label for="prompt">Video Prompt</label>
+                    <textarea 
+                        id="prompt" 
+                        placeholder="Describe the video you want to generate. Be creative and specific! (e.g., 'A sunset over mountains with golden light reflecting off a lake')"
+                    ></textarea>
+                    <span class="model-description">Minimum 10 characters, maximum 500 characters</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="model">Generation Model</label>
+                    <select id="model">
+                        <option value="simple">Simple (Instant - No API)</option>
+                        <option value="huggingface">HuggingFace (AI-Powered)</option>
+                        <option value="replicate">Replicate (Recommended)</option>
+                        <option value="local">Local Diffusers (GPU-Required)</option>
+                    </select>
+                    <span class="model-description" id="model-info">Fast text-based generation with animated gradients</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="duration">Duration (seconds)</label>
+                    <input 
+                        type="range" 
+                        id="duration" 
+                        min="5" 
+                        max="60" 
+                        value="5"
+                    >
+                    <div class="range-info">
+                        <span>5s</span>
+                        <span class="duration-value"><span id="duration-value">5</span>s</span>
+                        <span>60s</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="steps">Inference Steps</label>
+                    <input 
+                        type="range" 
+                        id="steps" 
+                        min="10" 
+                        max="50" 
+                        value="25"
+                    >
+                    <div class="range-info">
+                        <span>Fast</span>
+                        <span class="duration-value"><span id="steps-value">25</span> steps</span>
+                        <span>Quality</span>
+                    </div>
+                    <span class="model-description">More steps = better quality but slower</span>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn-generate" id="generate-btn">Generate Video</button>
+                    <button class="btn-clear" id="clear-btn">Clear</button>
+                </div>
+            </div>
+
+            <!-- Preview Section -->
+            <div class="preview-section">
+                <div class="status-box" id="status-box">
+                    <span class="spinner"></span>
+                    <span id="status-message">Generating video...</span>
+                </div>
+
+                <div class="video-container" id="video-container">
+                    <video id="generated-video" controls></video>
+                    <div class="video-info" id="video-info"></div>
+                </div>
+
+                <div class="info-section">
+                    <h3>📋 Model Information</h3>
+                    <p><strong>Simple:</strong> Fast local generation, no API required</p>
+                    <p><strong>HuggingFace:</strong> AI-powered with HF API token</p>
+                    <p><strong>Replicate:</strong> Most reliable, requires Replicate API key</p>
+                    <p><strong>Local:</strong> Highest quality but requires GPU (10-24GB VRAM)</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration - Auto-detect API URL
+        const API_BASE_URL = (() => {
+            const saved = localStorage.getItem('apiBaseUrl');
+            if (saved) return saved;
+            
+            // Detect if we're on a server, otherwise use localhost:3000
+            if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
+                // We're on a web server, use relative API path
+                return '';
+            }
+            
+            // We're opening as a file, default to localhost:3000
+            return 'http://localhost:3000';
+        })();
+        
+        console.log('API Base URL:', API_BASE_URL || '(using relative paths)');
+        
+        // Elements
+        const promptInput = document.getElementById('prompt');
+        const modelSelect = document.getElementById('model');
+        const durationSlider = document.getElementById('duration');
+        const stepsSlider = document.getElementById('steps');
+        const generateBtn = document.getElementById('generate-btn');
+        const clearBtn = document.getElementById('clear-btn');
+        const statusBox = document.getElementById('status-box');
+        const statusMessage = document.getElementById('status-message');
+        const videoContainer = document.getElementById('video-container');
+        const generatedVideo = document.getElementById('generated-video');
+        const videoInfo = document.getElementById('video-info');
+        const durationValue = document.getElementById('duration-value');
+        const stepsValue = document.getElementById('steps-value');
+        const modelInfo = document.getElementById('model-info');
+
+        // Model information
+        const modelDescriptions = {
+            simple: 'Fast text-based generation with animated gradients (instant)',
+            huggingface: 'AI-powered video generation using HuggingFace API (1-5 minutes)',
+            replicate: 'High-quality AI generation via Replicate (2-5 minutes)',
+            local: 'Premium local generation with Diffusers (5-15 minutes, GPU required)'
+        };
+
+        // Update duration value display
+        durationSlider.addEventListener('input', (e) => {
+            durationValue.textContent = e.target.value;
+        });
+
+        // Update steps value display
+        stepsSlider.addEventListener('input', (e) => {
+            stepsValue.textContent = e.target.value;
+        });
+
+        // Update model description
+        modelSelect.addEventListener('change', (e) => {
+            modelInfo.textContent = modelDescriptions[e.target.value];
+        });
+
+        // Clear form
+        clearBtn.addEventListener('click', () => {
+            promptInput.value = '';
+            modelSelect.value = 'simple';
+            durationSlider.value = 5;
+            stepsSlider.value = 25;
+            durationValue.textContent = '5';
+            stepsValue.textContent = '25';
+            videoContainer.classList.remove('show');
+            statusBox.classList.remove('show');
+            modelInfo.textContent = modelDescriptions.simple;
+            promptInput.focus();
+        });
+
+        // Show status message
+        function showStatus(message, type = 'info') {
+            statusMessage.textContent = message;
+            statusBox.className = `status-box show ${type}`;
+        }
+
+        // Generate video
+        generateBtn.addEventListener('click', async () => {
+            const prompt = promptInput.value.trim();
+
+            // Validation
+            if (!prompt) {
+                showStatus('Please enter a prompt', 'error');
+                return;
+            }
+
+            if (prompt.length < 10) {
+                showStatus('Prompt must be at least 10 characters', 'error');
+                return;
+            }
+
+            if (prompt.length > 500) {
+                showStatus('Prompt cannot exceed 500 characters', 'error');
+                return;
+            }
+
+            // Disable button and show loading
+            generateBtn.disabled = true;
+            showStatus('🎬 Generating video... This may take a few minutes.', 'info');
+            videoContainer.classList.remove('show');
+
+            try {
+                const response = await fetch(API_BASE_URL + '/api/generate-video', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        prompt: prompt,
+                        duration: parseInt(durationSlider.value),
+                        model: modelSelect.value,
+                        steps: parseInt(stepsSlider.value)
+                    })
+                });
+
+                // Check if response is ok first
+                if (!response.ok) {
+                    const text = await response.text();
+                    try {
+                        const data = JSON.parse(text);
+                        throw new Error(data.error || `HTTP ${response.status}: ${response.statusText}`);
+                    } catch (e) {
+                        throw new Error(`HTTP ${response.status}: ${text || response.statusText}`);
+                    }
+                }
+
+                // Parse JSON response
+                let data;
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    data = await response.json();
+                } else {
+                    const text = await response.text();
+                    console.error('Invalid response type:', contentType);
+                    throw new Error('Invalid response from server (not JSON)');
+                }
+
+                if (!data.videoUrl) {
+                    throw new Error(data.error || 'No video URL in response');
+                }
+
+                // Display video
+                generatedVideo.src = data.videoUrl;
+                videoInfo.innerHTML = `
+                    <p><strong>Status:</strong> ✓ Video generated successfully!</p>
+                    <p><strong>Prompt:</strong> ${prompt}</p>
+                    <p><strong>Duration:</strong> ${durationSlider.value}s | <strong>Model:</strong> ${modelSelect.value}</p>
+                    <p><strong>URL:</strong> <code>${data.videoUrl}</code></p>
+                `;
+                videoContainer.classList.add('show');
+                showStatus('✓ Video generated successfully!', 'success');
+
+            } catch (error) {
+                showStatus(`❌ Error: ${error.message}`, 'error');
+                console.error('Error details:', error);
+            } finally {
+                generateBtn.disabled = false;
+            }
+        });
+
+        // Allow Enter key to generate
+        promptInput.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'Enter') {
+                generateBtn.click();
+            }
+        });
+
+        // Focus on prompt input
+        promptInput.focus();
+    </script>
+</body>
+</html>
