@@ -29,6 +29,7 @@ yarn-error.log*
 .env.development.local
 .env.test.local
 .env.production.local
+.env.*.local
 
 # vercel
 .vercel
@@ -43,3 +44,46 @@ next-env.d.ts
 *.swp
 *.swo
 *~
+
+# Secret and credential files
+*.key
+*.pem
+*.p12
+*.pfx
+.aws/credentials
+.aws/config
+secrets/
+config/secrets
+.gpg-id
+client_secret*.json
+service-account-key.json
+credentials.json
+google-credentials.json
+oauth*.json
+api_key*.txt
+token*.txt
+access_token*
+refresh_token*
+.ssh/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+pipenv.lock
+poetry.lock
+venv/
+ENV/
+env/
+.venv/
+.env
+pip-log.txt
+pip-delete-this-directory.txt
+
+# API keys and secrets
+.secrets
+secrets.txt
+*.secret
+api-keys.json
+config-local.json
