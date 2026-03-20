@@ -12,6 +12,12 @@ export default function VideoGeneratorPage() {
           <p className="text-xl text-slate-300">
             Create stunning AI-generated videos from text prompts
           </p>
+          <a
+            href="/video-editor"
+            className="inline-block mt-4 text-blue-300 hover:text-blue-200"
+          >
+            Need to edit an existing clip? Open Video Editor →
+          </a>
         </div>
 
         {/* Video Generator Form */}

@@ -6,6 +6,24 @@ import fs from 'fs';
 const BACKEND_SCRIPT = path.join(process.cwd(), 'backend/video_generation/generate_video.py');
 const OUTPUT_DIR = path.join(process.cwd(), 'public/generated-videos');
 
+function getPythonExecutable(): string {
+  if (process.env.PYTHON_PATH) {
+    return process.env.PYTHON_PATH;
+  }
+
+  const windowsVenvPython = path.join(process.cwd(), '.venv', 'Scripts', 'python.exe');
+  if (fs.existsSync(windowsVenvPython)) {
+    return windowsVenvPython;
+  }
+
+  const unixVenvPython = path.join(process.cwd(), '.venv', 'bin', 'python');
+  if (fs.existsSync(unixVenvPython)) {
+    return unixVenvPython;
+  }
+
+  return 'python';
+}
+
 // Ensure output directory exists
 if (!fs.existsSync(OUTPUT_DIR)) {
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
@@ -119,7 +137,7 @@ function generateVideoWithPython(
         steps.toString(),
       ];
 
-      const pythonProcess = spawn('python', args);
+      const pythonProcess = spawn(getPythonExecutable(), args);
 
       let stderr = '';
       let stdout = '';

@@ -23,6 +23,9 @@ const Navbar = () => {
           {/* Navigation Links */}
           <div className="hidden md:flex items-center space-x-8">
             <a href="/dashboard" className="text-gray-600 hover:text-indigo-600 transition-colors font-medium">Dashboard</a>
+            <a href="/oasis-studio" className="text-gray-600 hover:text-indigo-600 transition-colors font-medium">Oasis Studio</a>
+            <a href="/video-generator" className="text-gray-600 hover:text-indigo-600 transition-colors font-medium">Video Generator</a>
+            <a href="/video-editor" className="text-gray-600 hover:text-indigo-600 transition-colors font-medium">Video Editor</a>
             <a href="#" className="text-gray-600 hover:text-indigo-600 transition-colors font-medium">Content Generator</a>
             <a href="#" className="text-gray-600 hover:text-indigo-600 transition-colors font-medium">History</a>
           </div>
