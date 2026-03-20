@@ -27,7 +27,20 @@ except ModuleNotFoundError:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Offline local text-to-music prototype (text generation + humming analysis)."
+        description=(
+            "Offline local text-to-music prototype (text generation + humming analysis).\n"
+            "Use text mode by default, or pass --humming-wav for analysis/export mode."
+        ),
+        epilog=(
+            "Examples (Windows / PowerShell):\n"
+            "  python -m app.main --prompt \"Cinematic ambient pad with soft piano\" --duration 6\n"
+            "  python -m app.main --humming-wav outputs\\musicgen_20260320_015111.wav\n"
+            "  python -m app.main --humming-wav outputs\\musicgen_20260320_015111.wav --melody-out outputs\\melody_events.json\n"
+            "  python -m app.main --humming-wav outputs\\musicgen_20260320_015111.wav --melody-midi-out outputs\\melody_events.mid\n"
+            "  python -m app.main --humming-wav outputs\\musicgen_20260320_015111.wav --melody-guide-out outputs\\melody_guide.wav\n"
+            "  python -m app.main --prompt \"Lo-fi chill beat\" --duration 4 --guide-audio-wav outputs\\melody_guide.wav"
+        ),
+        formatter_class=argparse.RawTextHelpFormatter,
     )
     parser.add_argument(
         "--prompt",
@@ -150,8 +163,8 @@ def main() -> None:
         print(f"Prompt: {sample_prompt}")
         print(f"Duration (s): {args.duration}")
         print(f"Seed: {args.seed}")
-        print(f"Guide conditioning WAV: {args.guide_audio_wav}")
         if args.guide_audio_wav:
+            print(f"Guide conditioning WAV: {args.guide_audio_wav}")
             print("Note: guide-audio conditioning is experimental; text-only remains the primary generation path.")
 
         output_path = generate_music_clip(
