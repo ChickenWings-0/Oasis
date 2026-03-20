@@ -264,3 +264,48 @@ def save_melody_events_json(events: list[dict[str, object]], output_path: Path) 
     with output_path.open("w", encoding="utf-8") as f:
         json.dump(events, f, indent=2)
     return output_path
+
+
+def save_melody_events_midi(
+    events: list[dict[str, object]],
+    output_path: Path,
+    tempo_bpm: int = 120,
+    velocity: int = 80,
+    ticks_per_beat: int = 480,
+) -> Path:
+    """Export extracted melody events as a standard MIDI file."""
+    try:
+        import mido
+    except ImportError as exc:
+        raise ImportError("mido is required for MIDI export. Install with: pip install mido") from exc
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    mid = mido.MidiFile(ticks_per_beat=ticks_per_beat)
+    track = mido.MidiTrack()
+    mid.tracks.append(track)
+
+    tempo = mido.bpm2tempo(tempo_bpm)
+    track.append(mido.MetaMessage("set_tempo", tempo=tempo, time=0))
+
+    event_messages: list[tuple[float, object]] = []
+    for event in events:
+        start_sec = max(0.0, float(event["start_sec"]))
+        end_sec = max(start_sec, float(event["end_sec"]))
+        note = int(event["midi"])
+
+        event_messages.append((start_sec, mido.Message("note_on", note=note, velocity=velocity, time=0)))
+        event_messages.append((end_sec, mido.Message("note_off", note=note, velocity=0, time=0)))
+
+    event_messages.sort(key=lambda x: (x[0], 0 if x[1].type == "note_off" else 1))
+
+    last_time_sec = 0.0
+    for when_sec, msg in event_messages:
+        delta_sec = max(0.0, when_sec - last_time_sec)
+        delta_ticks = int(round(mido.second2tick(delta_sec, ticks_per_beat, tempo)))
+        msg.time = delta_ticks
+        track.append(msg)
+        last_time_sec = when_sec
+
+    mid.save(str(output_path))
+    return output_path

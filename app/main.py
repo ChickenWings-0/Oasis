@@ -6,11 +6,21 @@ from pathlib import Path
 try:
     from app.config import MODEL_ID, get_device
     from app.generate import analyze_audio_file, generate_music_clip
-    from app.humming import extract_melody_events, preprocess_humming_wav, save_melody_events_json
+    from app.humming import (
+        extract_melody_events,
+        preprocess_humming_wav,
+        save_melody_events_json,
+        save_melody_events_midi,
+    )
 except ModuleNotFoundError:
     from config import MODEL_ID, get_device
     from generate import analyze_audio_file, generate_music_clip
-    from humming import extract_melody_events, preprocess_humming_wav, save_melody_events_json
+    from humming import (
+        extract_melody_events,
+        preprocess_humming_wav,
+        save_melody_events_json,
+        save_melody_events_midi,
+    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -40,6 +50,12 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default=None,
         help="Optional JSON path to save extracted melody events.",
+    )
+    parser.add_argument(
+        "--melody-midi-out",
+        type=str,
+        default=None,
+        help="Optional MIDI path to save extracted melody events as .mid.",
     )
     return parser.parse_args()
 
@@ -74,6 +90,10 @@ def main() -> None:
             if args.melody_out:
                 saved = save_melody_events_json(melody_events, Path(args.melody_out))
                 print(f"Saved melody events JSON: {saved.resolve()}")
+
+            if args.melody_midi_out:
+                saved_midi = save_melody_events_midi(melody_events, Path(args.melody_midi_out))
+                print(f"Saved melody events MIDI: {saved_midi.resolve()}")
             return
 
         device = get_device()
