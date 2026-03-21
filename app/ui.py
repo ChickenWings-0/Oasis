@@ -6,6 +6,8 @@ from pathlib import Path
 import gradio as gr
 
 from app.config import OUTPUT_DIR
+from app.analysis import detect_bpm, detect_key
+from app.chords import detect_chords
 from app.generate import generate_music_clip as generate_music
 from app.humming import (
     extract_melody_events,
@@ -15,6 +17,7 @@ from app.humming import (
     save_melody_events_midi,
 )
 from app.separation import separate_audio
+from app.tabs import generate_tabs_data
 
 
 def run_text_to_music(prompt: str, duration: int):
@@ -126,6 +129,51 @@ def run_instrument_separation(audio_path: str):
         message = "Instrument separation failed. Please try another file or check Demucs installation."
         gr.Error(message)
         return message, None, None, None, None, None, None, None, None, None, None, None, None
+
+
+def run_audio_analysis(audio_path: str):
+    if not audio_path:
+        message = "Please upload an audio file before analysis."
+        gr.Warning(message)
+        return message, "", "", "", "", "", ""
+
+    input_path = Path(audio_path)
+    if input_path.suffix.lower() not in {".wav", ".mp3"}:
+        message = "Invalid format. Please upload a WAV or MP3 file."
+        gr.Warning(message)
+        return message, "", "", "", "", "", ""
+
+    try:
+        bpm_result = detect_bpm(path=input_path)
+        key_result = detect_key(path=input_path)
+        chords = detect_chords(path=input_path)
+        tabs_data = generate_tabs_data(chords)
+
+        guitar_tabs = tabs_data["guitar_tabs"]
+        keyboard_notes = tabs_data["keyboard_notes"]
+
+        bpm_value = bpm_result.get("bpm", "")
+        bpm_text = str(round(float(bpm_value), 2)) if bpm_value != "" else ""
+        key_text = str(key_result.get("key", ""))
+        scale_text = str(key_result.get("scale", ""))
+        chords_text = ", ".join(chords) if chords else "No chords detected"
+        clean_tabs = [tab if tab != "unknown" else "N/A" for tab in guitar_tabs]
+        guitar_tabs_text = " | ".join(clean_tabs)
+        keyboard_notes_text = ", ".join(["-".join(notes) for notes in keyboard_notes])
+
+        return (
+            "Audio analysis complete.",
+            bpm_text,
+            key_text,
+            scale_text,
+            chords_text,
+            guitar_tabs_text,
+            keyboard_notes_text,
+        )
+    except Exception:
+        message = "Audio analysis failed. Please try another file."
+        gr.Error(message)
+        return message, "", "", "", "", "", ""
 
 
 def set_preset_lofi() -> str:
@@ -254,6 +302,39 @@ def build_ui() -> gr.Blocks:
                         other_audio,
                         other_path,
                         other_download,
+                    ],
+                    show_progress="full",
+                )
+            )
+
+        with gr.Tab("Audio Analysis"):
+            analysis_input = gr.File(label="Upload Audio (WAV/MP3)", file_types=[".wav", ".mp3"], type="filepath")
+            analysis_btn = gr.Button("Analyze Audio")
+            analysis_status_output = gr.Textbox(label="Status", interactive=False)
+            analysis_bpm_output = gr.Textbox(label="BPM", interactive=False)
+            analysis_key_output = gr.Textbox(label="Key", interactive=False)
+            analysis_scale_output = gr.Textbox(label="Scale", interactive=False)
+            analysis_chords_output = gr.Textbox(label="Chords", interactive=False)
+            guitar_tabs_output = gr.Textbox(label="Guitar Tabs", interactive=False)
+            keyboard_notes_output = gr.Textbox(label="Keyboard Notes", interactive=False)
+
+            (
+                analysis_btn.click(
+                    fn=lambda: "Analyzing audio...",
+                    inputs=None,
+                    outputs=[analysis_status_output],
+                    show_progress="hidden",
+                ).then(
+                    fn=run_audio_analysis,
+                    inputs=[analysis_input],
+                    outputs=[
+                        analysis_status_output,
+                        analysis_bpm_output,
+                        analysis_key_output,
+                        analysis_scale_output,
+                        analysis_chords_output,
+                        guitar_tabs_output,
+                        keyboard_notes_output,
                     ],
                     show_progress="full",
                 )

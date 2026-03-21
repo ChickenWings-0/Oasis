@@ -18,7 +18,8 @@ def detect_bpm(path: str | Path) -> dict:
     waveform, sample_rate = librosa.load(str(audio_path), sr=None, mono=True)
     tempo, _ = librosa.beat.beat_track(y=waveform, sr=sample_rate)
 
-    return {"bpm": float(tempo)}
+    bpm_value = float(tempo) if not isinstance(tempo, np.ndarray) else float(tempo[0])
+    return {"bpm": bpm_value}
 
 
 def detect_key(path: str | Path) -> dict:
