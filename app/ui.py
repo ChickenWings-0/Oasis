@@ -203,26 +203,52 @@ def run_audio_analysis(audio_path: str):
         return str(e), "", "", "", "", "", "", "", "", ""
 
 
-def run_section_tempo(audio_path, start1, end1, bpm1, start2, end2, bpm2):
+def run_section_tempo(audio_path, table_data):
     if not audio_path:
         return None
 
-    if end1 <= start1 or end2 <= start2:
-        import gradio as gr
-        gr.Error("End time must be greater than start time.")
-        return None
-
-    if start2 < end1:
-        import gradio as gr
-        gr.Error("Sections must not overlap.")
-        return None
+    print("RAW TABLE DATA:", table_data)
 
     from app.control import apply_section_tempo
 
-    sections = [
-        {"start": start1, "end": end1, "bpm": bpm1},
-        {"start": start2, "end": end2, "bpm": bpm2},
-    ]
+    sections = []
+
+    for _, row in table_data.iterrows():
+        try:
+            start = float(row["start"])
+            end = float(row["end"])
+            bpm = float(row["bpm"])
+
+            if end <= start:
+                continue
+
+            sections.append({
+                "start": start,
+                "end": end,
+                "bpm": bpm
+            })
+
+        except:
+            continue
+
+    print("PARSED SECTIONS:", sections)
+
+    # sort sections by start time
+    sections = sorted(sections, key=lambda x: x["start"])
+
+    # check overlaps
+    for i in range(len(sections) - 1):
+        if sections[i]["end"] > sections[i + 1]["start"]:
+            import gradio as gr
+            gr.Error("Sections must not overlap.")
+            return None
+
+    print("FINAL SORTED SECTIONS:", sections)
+
+    if not sections:
+        import gradio as gr
+        gr.Error("No valid sections provided.")
+        return None
 
     try:
         output_path = apply_section_tempo(audio_path, sections)
@@ -405,18 +431,24 @@ def build_ui() -> gr.Blocks:
 
         with gr.Tab("Tempo Control"):
             audio_input = gr.File(label="Upload Audio", type="filepath")
-            start1 = gr.Number(label="Start Time (sec)", value=0)
-            end1 = gr.Number(label="End Time (sec)", value=5)
-            bpm1 = gr.Slider(40, 200, value=80, label="BPM")
-            start2 = gr.Number(label="Start Time (sec)", value=5)
-            end2 = gr.Number(label="End Time (sec)", value=10)
-            bpm2 = gr.Slider(40, 200, value=120, label="BPM")
+            sections_table = gr.Dataframe(
+                headers=["start", "end", "bpm"],
+                datatype=["number", "number", "number"],
+                value=[
+                    [0, 5, 80],
+                    [5, 10, 120]
+                ],
+                row_count=(2, "dynamic"),
+                col_count=(3, "fixed"),
+                interactive=True,
+                label="Tempo Sections"
+            )
             apply_btn = gr.Button("Apply Tempo Changes")
             output_audio = gr.Audio(label="Processed Audio")
 
             apply_btn.click(
                 fn=run_section_tempo,
-                inputs=[audio_input, start1, end1, bpm1, start2, end2, bpm2],
+                inputs=[audio_input, sections_table],
                 outputs=[output_audio],
             )
 
