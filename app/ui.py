@@ -16,6 +16,7 @@ from app.humming import (
     save_melody_events_json,
     save_melody_events_midi,
 )
+from app.music_logic import enrich_metadata_with_analysis
 from app.separation import separate_audio
 from app.tabs import generate_tabs_data
 
@@ -33,10 +34,12 @@ def run_text_to_music(prompt: str, duration: int):
         )
         resolved = str(output_path.resolve())
         return "Music generation complete.", resolved, resolved
-    except Exception:
-        message = "Music generation failed. Please try again with a shorter duration or a different prompt."
-        gr.Error(message)
-        return message, None, None
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        import gradio as gr
+        gr.Error(f"Generation failed: {str(e)}")
+        return str(e), None, None
 
 
 def run_humming_analysis(humming_wav_path: str):
@@ -135,24 +138,36 @@ def run_audio_analysis(audio_path: str):
     if not audio_path:
         message = "Please upload an audio file before analysis."
         gr.Warning(message)
-        return message, "", "", "", "", "", ""
+        return message, "", "", "", "", "", "", "", "", ""
 
     input_path = Path(audio_path)
     if input_path.suffix.lower() not in {".wav", ".mp3"}:
         message = "Invalid format. Please upload a WAV or MP3 file."
         gr.Warning(message)
-        return message, "", "", "", "", "", ""
+        return message, "", "", "", "", "", "", "", "", ""
 
     try:
         bpm_result = detect_bpm(path=input_path)
+        bpm_value = bpm_result.get("bpm", "")
         key_result = detect_key(path=input_path)
         chords = detect_chords(path=input_path)
+
+        prompt = "default music prompt"
+        analysis_data = enrich_metadata_with_analysis(
+            str(input_path),
+            prompt,
+            chords,
+            float(bpm_value) if bpm_value else 120.0
+        )
+        metadata = analysis_data["metadata"]
+        chord_groups = analysis_data["chords"]
+        bassline = analysis_data["bassline"]
+
         tabs_data = generate_tabs_data(chords)
 
         guitar_tabs = tabs_data["guitar_tabs"]
         keyboard_notes = tabs_data["keyboard_notes"]
 
-        bpm_value = bpm_result.get("bpm", "")
         bpm_text = str(round(float(bpm_value), 2)) if bpm_value != "" else ""
         key_text = str(key_result.get("key", ""))
         scale_text = str(key_result.get("scale", ""))
@@ -160,6 +175,13 @@ def run_audio_analysis(audio_path: str):
         clean_tabs = [tab if tab != "unknown" else "N/A" for tab in guitar_tabs]
         guitar_tabs_text = " | ".join(clean_tabs)
         keyboard_notes_text = ", ".join(["-".join(notes) for notes in keyboard_notes])
+        metadata_text = (
+            f"Mood: {metadata.get('mood')}\n"
+            f"Tempo: {metadata.get('tempo')}\n"
+            f"Genre: {metadata.get('genre')}"
+        )
+        chord_groups_text = f"Major: {chord_groups['major']}, Minor: {chord_groups['minor']}"
+        bassline_text = ", ".join(bassline)
 
         return (
             "Audio analysis complete.",
@@ -169,11 +191,46 @@ def run_audio_analysis(audio_path: str):
             chords_text,
             guitar_tabs_text,
             keyboard_notes_text,
+            metadata_text,
+            chord_groups_text,
+            bassline_text,
         )
-    except Exception:
-        message = "Audio analysis failed. Please try another file."
-        gr.Error(message)
-        return message, "", "", "", "", "", ""
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        import gradio as gr
+        gr.Error(f"Audio analysis failed: {str(e)}")
+        return str(e), "", "", "", "", "", "", "", "", ""
+
+
+def run_section_tempo(audio_path, start1, end1, bpm1, start2, end2, bpm2):
+    if not audio_path:
+        return None
+
+    if end1 <= start1 or end2 <= start2:
+        import gradio as gr
+        gr.Error("End time must be greater than start time.")
+        return None
+
+    if start2 < end1:
+        import gradio as gr
+        gr.Error("Sections must not overlap.")
+        return None
+
+    from app.control import apply_section_tempo
+
+    sections = [
+        {"start": start1, "end": end1, "bpm": bpm1},
+        {"start": start2, "end": end2, "bpm": bpm2},
+    ]
+
+    try:
+        output_path = apply_section_tempo(audio_path, sections)
+        return output_path
+    except Exception as e:
+        import gradio as gr
+        gr.Error(f"Tempo processing failed: {str(e)}")
+        return None
 
 
 def set_preset_lofi() -> str:
@@ -317,6 +374,9 @@ def build_ui() -> gr.Blocks:
             analysis_chords_output = gr.Textbox(label="Chords", interactive=False)
             guitar_tabs_output = gr.Textbox(label="Guitar Tabs", interactive=False)
             keyboard_notes_output = gr.Textbox(label="Keyboard Notes", interactive=False)
+            metadata_output = gr.Textbox(label="Metadata", interactive=False)
+            chord_groups_output = gr.Textbox(label="Chord Groups", interactive=False)
+            bassline_output = gr.Textbox(label="Bassline", interactive=False)
 
             (
                 analysis_btn.click(
@@ -335,9 +395,29 @@ def build_ui() -> gr.Blocks:
                         analysis_chords_output,
                         guitar_tabs_output,
                         keyboard_notes_output,
+                        metadata_output,
+                        chord_groups_output,
+                        bassline_output,
                     ],
                     show_progress="full",
                 )
+            )
+
+        with gr.Tab("Tempo Control"):
+            audio_input = gr.File(label="Upload Audio", type="filepath")
+            start1 = gr.Number(label="Start Time (sec)", value=0)
+            end1 = gr.Number(label="End Time (sec)", value=5)
+            bpm1 = gr.Slider(40, 200, value=80, label="BPM")
+            start2 = gr.Number(label="Start Time (sec)", value=5)
+            end2 = gr.Number(label="End Time (sec)", value=10)
+            bpm2 = gr.Slider(40, 200, value=120, label="BPM")
+            apply_btn = gr.Button("Apply Tempo Changes")
+            output_audio = gr.Audio(label="Processed Audio")
+
+            apply_btn.click(
+                fn=run_section_tempo,
+                inputs=[audio_input, start1, end1, bpm1, start2, end2, bpm2],
+                outputs=[output_audio],
             )
 
     return demo
