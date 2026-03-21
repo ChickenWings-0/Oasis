@@ -41,9 +41,10 @@ async def startup_event():
     print(f"Database: {settings.project_database_url}")
 
 
-# TODO: Add routers
-# from .routes import project_routes, branch_routes, commit_routes, merge_routes
-# app.include_router(project_routes.router)
-# app.include_router(branch_routes.router)
-# app.include_router(commit_routes.router)
-# app.include_router(merge_routes.router)
+# Include routers
+from .routes import project_routes, branch_routes, commit_routes, merge_routes
+
+app.include_router(project_routes.router)
+app.include_router(branch_routes.router)
+app.include_router(commit_routes.router)
+app.include_router(merge_routes.router)

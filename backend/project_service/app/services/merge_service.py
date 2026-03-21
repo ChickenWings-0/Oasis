@@ -184,6 +184,15 @@ class MergeService:
         
         return merge_commit
 
+    def get_merge(self, merge_id: int) -> Merge | None:
+        """
+        Get single merge by ID
+        """
+        merge = self.merge_repo.get_merge_by_id(merge_id)
+        if not merge:
+            raise ValueError(f"Merge {merge_id} not found")
+        return merge
+
     def get_merge_history(self, project_id: int, skip: int = 0, limit: int = 100) -> list[Merge]:
         """
         Get all merges in a project
