@@ -1,13 +1,21 @@
 # Token creation & verification
-import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import jwt
 import uuid
 from fastapi import HTTPException, status
 
+import os
+
 # JWT Configuration
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-me-in-production")
+if SECRET_KEY == "change-me-in-production":
+    import warnings
+    warnings.warn(
+        "JWT_SECRET_KEY is not set. Using default insecure key. "
+        "Set JWT_SECRET_KEY environment variable in production.",
+        RuntimeWarning
+    )
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 

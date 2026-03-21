@@ -3,8 +3,11 @@ from sqlalchemy import Column, Integer, String, DateTime, Boolean
 from datetime import datetime
 from backend.user_services.database import Base
 
+
 class User(Base):
+    """User model for authentication"""
     __tablename__ = "users"
+    __allow_unmapped__ = True  # Allow unmapped columns for Pydantic v2 compatibility
 
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, index=True, nullable=False)
