@@ -2,16 +2,17 @@
 Merge Routes - Endpoints for managing merges
 
 REST API for CRUD operations on merges.
-All routes require authentication via X-User-ID header.
+All routes require authentication via JWT or X-User-ID header.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..dependencies.auth_dependency import get_current_user
+from ..dependencies.auth_dependency import get_current_user, CurrentUser
 from ..services import MergeService
 from ..schemas import MergeResponse
+from ..exceptions import ForbiddenError, NotFoundError, ValidationError
 from typing import List
 
 
@@ -29,7 +30,7 @@ router = APIRouter(
 )
 async def merge_branches(
     request_body: dict,  # {"source_branch_id": int, "target_branch_id": int}
-    current_user: int = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -54,21 +55,26 @@ async def merge_branches(
         service = MergeService(db)
         
         merge = service.merge_branches(
-            user_id=current_user,
+            user_id=current_user.user_id,
             source_id=request_body["source_branch_id"],
             target_id=request_body["target_branch_id"]
         )
         
         return merge
-    except ValueError as e:
+    except ValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=e.message
         )
-    except PermissionError as e:
+    except ForbiddenError as e:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e)
+            detail=e.message
+        )
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=e.message
         )
     except Exception as e:
         raise HTTPException(
@@ -95,14 +101,12 @@ async def get_merge(
     try:
         service = MergeService(db)
         merge = service.get_merge(merge_id)
-        
-        if not merge:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Merge {merge_id} not found"
-            )
-        
         return merge
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=e.message
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -135,6 +139,11 @@ async def get_merge_history(
         service = MergeService(db)
         merges = service.get_merge_history(project_id, skip=skip, limit=limit)
         return merges
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=e.message
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

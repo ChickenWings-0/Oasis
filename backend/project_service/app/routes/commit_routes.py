@@ -2,16 +2,17 @@
 Commit Routes - Endpoints for managing commits
 
 REST API for CRUD operations on commits.
-All routes require authentication via X-User-ID header.
+All routes require authentication via JWT or X-User-ID header.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..dependencies.auth_dependency import get_current_user
+from ..dependencies.auth_dependency import get_current_user, CurrentUser
 from ..services import CommitService
 from ..schemas import CommitResponse
+from ..exceptions import ForbiddenError, NotFoundError, ValidationError
 from typing import List
 
 
@@ -29,7 +30,7 @@ router = APIRouter(
 )
 async def create_commit(
     request_body: dict,  # {"message": str, "branch_id": int}
-    current_user: int = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -53,17 +54,27 @@ async def create_commit(
         service = CommitService(db)
         
         commit = service.create_commit(
-            user_id=current_user,
+            user_id=current_user.user_id,
             branch_id=request_body["branch_id"],
             message=request_body["message"],
-            author_id=current_user
+            author_id=current_user.user_id
         )
         
         return commit
-    except ValueError as e:
+    except ValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=e.message
+        )
+    except ForbiddenError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=e.message
+        )
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=e.message
         )
     except Exception as e:
         raise HTTPException(
@@ -90,14 +101,12 @@ async def get_commit(
     try:
         service = CommitService(db)
         commit = service.get_commit(commit_id)
-        
-        if not commit:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Commit {commit_id} not found"
-            )
-        
         return commit
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=e.message
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -130,6 +139,11 @@ async def get_branch_history(
         service = CommitService(db)
         commits = service.get_branch_history(branch_id, skip=skip, limit=limit)
         return commits
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=e.message
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

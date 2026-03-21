@@ -3,12 +3,18 @@ from ..models import Project
 from ..schemas import ProjectCreate
 from ..repositories import ProjectRepository, BranchRepository
 from ..schemas import BranchCreate
+from ..exceptions import ForbiddenError, NotFoundError, ValidationError
 
 
 class ProjectService:
     """
     Business logic layer for Projects
     Handles validation, ownership, and orchestration
+    
+    AUTHORIZATION RULES:
+    - Only owner can get/delete their project
+    - Only authenticated users can create projects
+    - Project deletion is owner-only
     """
 
     def __init__(self, db: Session):
@@ -20,20 +26,22 @@ class ProjectService:
         """
         Create new project with ownership and auto-create main branch
         
+        AUTHORIZATION: Any authenticated user can create projects
+        
         Flow:
-        1. Validate project name (basic rules)
-        2. Create project via repo
+        1. Validate project name
+        2. Create project (owner = current user)
         3. Auto-create 'main' branch as default
         4. Return project
         """
         # Validate project name
         if not project_data.name or len(project_data.name.strip()) == 0:
-            raise ValueError("Project name cannot be empty")
+            raise ValidationError("Project name cannot be empty")
         
         if len(project_data.name) > 255:
-            raise ValueError("Project name must be <= 255 characters")
+            raise ValidationError("Project name must be <= 255 characters")
         
-        # Create project (ownership set to user_id)
+        # Create project (ownership set to user_id from auth)
         project_create = ProjectCreate(
             name=project_data.name,
             description=project_data.description,
@@ -55,24 +63,32 @@ class ProjectService:
         """
         Get project with ownership verification
         
+        AUTHORIZATION: Only owner can view their project
+        
         Rules:
         1. Project must exist
-        2. Current user must be owner
+        2. Current user must be the owner
+        
+        Raises:
+        - NotFoundError: Project doesn't exist
+        - ForbiddenError: User is not the owner
         """
         project = self.project_repo.get_project_by_id(project_id)
         
         if not project:
-            raise ValueError(f"Project {project_id} not found")
+            raise NotFoundError(f"Project {project_id} not found")
         
-        # Ownership check
+        # AUTHORIZATION CHECK: Verify ownership
         if project.owner_id != user_id:
-            raise PermissionError(f"User {user_id} does not own project {project_id}")
+            raise ForbiddenError(f"You do not own project {project_id}")
         
         return project
 
     def list_user_projects(self, user_id: int, skip: int = 0, limit: int = 100) -> list[Project]:
         """
-        List all projects owned by user
+        List all projects owned by current user
+        
+        AUTHORIZATION: Users can only list their own projects
         """
         return self.project_repo.list_projects(owner_id=user_id, skip=skip, limit=limit)
 
@@ -80,11 +96,18 @@ class ProjectService:
         """
         Delete project with ownership verification
         
+        AUTHORIZATION: Only owner can delete their project
+        
         Rules:
         1. Project must exist
-        2. Current user must be owner
+        2. Current user must be the owner
         3. Deletion cascades to all branches, commits, merges
+        
+        Raises:
+        - NotFoundError: Project doesn't exist
+        - ForbiddenError: User is not the owner
         """
-        project = self.get_project(user_id, project_id)  # Raises if not found or not owner
+        # This internally checks authorization (calls get_project which verifies ownership)
+        project = self.get_project(user_id, project_id)
         
         return self.project_repo.delete_project(project_id)

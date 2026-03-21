@@ -2,16 +2,17 @@
 Project Routes - Endpoints for managing projects
 
 REST API for CRUD operations on projects.
-All routes require authentication via X-User-ID header.
+All routes require authentication via JWT or X-User-ID header.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..dependencies.auth_dependency import get_current_user
+from ..dependencies.auth_dependency import get_current_user, CurrentUser
 from ..services import ProjectService
 from ..schemas import ProjectCreate, ProjectResponse
+from ..exceptions import ForbiddenError, NotFoundError, ValidationError
 from typing import List
 
 
@@ -29,7 +30,7 @@ router = APIRouter(
 )
 async def create_project(
     project_data: ProjectCreate,
-    current_user: int = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -37,27 +38,22 @@ async def create_project(
     
     - Validates project name
     - Auto-creates 'main' branch
-    - Sets owner to current user (from header)
+    - Sets owner to current authenticated user
     
     Returns: ProjectResponse with created project
     """
     try:
         # Remove owner_id from incoming data, set to current user
-        project_data.owner_id = current_user
+        project_data.owner_id = current_user.user_id
         
         service = ProjectService(db)
-        project = service.create_project(current_user, project_data)
+        project = service.create_project(current_user.user_id, project_data)
         
         return project
-    except ValueError as e:
+    except ValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except PermissionError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e)
+            detail=e.message
         )
     except Exception as e:
         raise HTTPException(
@@ -73,7 +69,7 @@ async def create_project(
     summary="Get all projects for current user"
 )
 async def get_user_projects(
-    current_user: int = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
     skip: int = 0,
     limit: int = 100
@@ -89,7 +85,7 @@ async def get_user_projects(
     """
     try:
         service = ProjectService(db)
-        projects = service.list_user_projects(current_user, skip=skip, limit=limit)
+        projects = service.list_user_projects(current_user.user_id, skip=skip, limit=limit)
         return projects
     except Exception as e:
         raise HTTPException(
@@ -106,7 +102,7 @@ async def get_user_projects(
 )
 async def get_project(
     project_id: int,
-    current_user: int = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -119,17 +115,17 @@ async def get_project(
     """
     try:
         service = ProjectService(db)
-        project = service.get_project(current_user, project_id)
+        project = service.get_project(current_user.user_id, project_id)
         return project
-    except ValueError as e:
+    except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
+            detail=e.message
         )
-    except PermissionError as e:
+    except ForbiddenError as e:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e)
+            detail=e.message
         )
     except Exception as e:
         raise HTTPException(
@@ -145,7 +141,7 @@ async def get_project(
 )
 async def delete_project(
     project_id: int,
-    current_user: int = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -159,22 +155,22 @@ async def delete_project(
     """
     try:
         service = ProjectService(db)
-        success = service.delete_project(current_user, project_id)
+        success = service.delete_project(current_user.user_id, project_id)
         
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to delete project"
             )
-    except ValueError as e:
+    except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
+            detail=e.message
         )
-    except PermissionError as e:
+    except ForbiddenError as e:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e)
+            detail=e.message
         )
     except Exception as e:
         raise HTTPException(

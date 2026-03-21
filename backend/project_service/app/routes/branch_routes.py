@@ -2,16 +2,17 @@
 Branch Routes - Endpoints for managing branches
 
 REST API for CRUD operations on branches.
-All routes require authentication via X-User-ID header.
+All routes require authentication via JWT or X-User-ID header.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..dependencies.auth_dependency import get_current_user
+from ..dependencies.auth_dependency import get_current_user, CurrentUser
 from ..services import BranchService
 from ..schemas import BranchCreate, BranchResponse
+from ..exceptions import ForbiddenError, NotFoundError, ValidationError
 from typing import List
 
 
@@ -29,7 +30,7 @@ router = APIRouter(
 )
 async def create_branch(
     request_body: dict,  # {"name": str, "project_id": int, "base_branch_id": int}
-    current_user: int = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -53,22 +54,27 @@ async def create_branch(
         service = BranchService(db)
         
         branch = service.create_branch(
-            user_id=current_user,
+            user_id=current_user.user_id,
             project_id=request_body["project_id"],
             base_branch_id=request_body["base_branch_id"],
             new_branch_name=request_body["name"]
         )
         
         return branch
-    except ValueError as e:
+    except ValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=e.message
         )
-    except PermissionError as e:
+    except ForbiddenError as e:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e)
+            detail=e.message
+        )
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=e.message
         )
     except Exception as e:
         raise HTTPException(
@@ -95,14 +101,12 @@ async def get_branch(
     try:
         service = BranchService(db)
         branch = service.get_branch(branch_id)
-        
-        if not branch:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Branch {branch_id} not found"
-            )
-        
         return branch
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=e.message
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -135,6 +139,11 @@ async def list_branches(
         service = BranchService(db)
         branches = service.list_branches(project_id, skip=skip, limit=limit)
         return branches
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=e.message
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
