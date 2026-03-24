@@ -22,6 +22,34 @@ except ModuleNotFoundError:
     from config import DEFAULT_DURATION_SECONDS, MODEL_ID, OUTPUT_DIR, SAMPLE_RATE, get_device
 
 
+MOOD_PROMPTS: dict[str, str] = {
+    "EDM / Club Banger": "energetic EDM beat with heavy bass drops, synthesizers, and pulsing drums at 128 bpm, club music",
+    "Trap / Hip-Hop": "dark trap beat with 808 bass, hi-hats, and atmospheric pads, hip hop production, 140 bpm",
+    "Lo-fi Chill": "lo-fi hip hop beat with vinyl crackle, mellow chords, relaxed drums, chill study music",
+    "Synthwave": "synthwave retro 80s electronic music with lush synthesizers, driving beat, nostalgic neon vibes",
+    "Deep House": "deep house music with groovy bassline, smooth synthesizers, four-on-the-floor drums, midnight dance floor",
+    "Drum and Bass": "fast drum and bass with rapid breakbeats, heavy sub-bass, aggressive energy, 174 bpm",
+    "Ambient": "ambient atmospheric music with evolving synthesizer pads, ethereal textures, slow floating soundscape",
+    "Phonk": "phonk music with memphis rap samples, dark twisted bass, aggressive drums, drifting energy",
+    "Calm Piano": "calm solo piano music, emotional and introspective, soft dynamics, gentle melody",
+    "Acoustic Guitar": "fingerpicked acoustic guitar, warm and intimate, folk style, gentle arpeggios",
+    "Jazz": "smooth jazz with saxophone lead, soft piano chords, upright bass, brushed drums, late night bar vibe",
+    "Blues": "soulful blues guitar with electric guitar riffs, steady rhythm, emotional and raw, Delta blues feel",
+    "Orchestral": "cinematic orchestral music with strings, brass, and dramatic crescendos, epic film score feeling",
+    "R&B / Soul": "modern R&B soul music with warm chord progressions, smooth bass, subtle drums, emotional vocals bed",
+    "Epic Cinematic": "epic cinematic orchestral battle music with massive drums, brass fanfare, intense strings, heroic",
+    "Metal": "heavy metal music with distorted electric guitars, fast double kick drums, aggressive energy",
+    "Indie Rock": "indie rock with jangly guitars, energetic drums, catchy melody, stadium anthemic feel",
+    "Afrobeats": "afrobeats music with percussion, talking drums, bright guitar riffs, danceable groove, West African rhythm",
+    "Meditation": "peaceful meditation music with singing bowls, soft pads, nature ambience, slow breathing rhythm",
+    "Nature Sounds": "gentle acoustic music blended with nature sounds, birds, stream, forest atmosphere, peaceful",
+    "Sleep Drone": "slow droning ambient music, very soft, hypnotic, warm bass tones, for sleep and relaxation",
+    "Bossa Nova": "bossa nova Brazilian jazz with nylon string guitar, light percussion, romantic and breezy",
+    "8-Bit Game": "retro video game chiptune music with 8-bit synth melodies, catchy loop, upbeat pixel adventure mood",
+    "Middle Eastern": "Middle Eastern music with oud, darbuka drums, haunting scales, traditional yet modern fusion",
+}
+
+
 def load_musicgen(model_id: str = MODEL_ID, device: str | None = None):
     """Load MusicGen model and processor for local inference."""
     resolved_device = device or get_device()

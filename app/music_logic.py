@@ -9,6 +9,121 @@ import numpy as np
 TEMPOS = ["slow", "medium", "fast"]
 
 
+def analyze_audio_character(path: str) -> dict[str, str]:
+    y, sr = librosa.load(path, sr=None, mono=True)
+
+    energy_level = float(np.mean(librosa.feature.rms(y=y)))
+    centroid = float(np.mean(librosa.feature.spectral_centroid(y=y, sr=sr)))
+    bandwidth = float(np.mean(librosa.feature.spectral_bandwidth(y=y, sr=sr)))
+    zero_crossing = float(np.mean(librosa.feature.zero_crossing_rate(y=y)))
+
+    # Additional features
+    spectral_flatness = float(np.mean(librosa.feature.spectral_flatness(y=y)))
+    tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
+    tempo = float(tempo)
+
+    softness = "high" if centroid < 1200 else "medium" if centroid < 2500 else "low"
+    brightness = "dark" if centroid < 1000 else "balanced" if centroid < 2500 else "bright"
+    energy = "low" if energy_level < 0.03 else "medium" if energy_level < 0.08 else "high"
+    warmth = "warm" if centroid < 1500 else "neutral" if centroid < 2800 else "cold"
+    density = "sparse" if zero_crossing < 0.05 else "medium" if zero_crossing < 0.12 else "dense"
+    aggressiveness = "low" if (energy_level < 0.04 and tempo < 100) else "medium" if (energy_level < 0.08 and tempo < 130) else "high"
+
+    # Dynamics (variation in loudness)
+    dynamic_range = float(np.std(librosa.feature.rms(y=y)))
+    dynamics = "low" if dynamic_range < 0.01 else "medium" if dynamic_range < 0.03 else "high"
+
+    # Harmonic richness
+    harmonic_richness = "low" if spectral_flatness > 0.5 else "medium" if spectral_flatness > 0.2 else "high"
+
+    # Ambience (proxy via spectral spread)
+    ambience = "dry" if bandwidth < 1500 else "moderate" if bandwidth < 3000 else "spacious"
+
+    # Groove tightness (based on onset consistency)
+    onsets = librosa.onset.onset_detect(y=y, sr=sr)
+    groove = "tight" if len(onsets) > 50 else "loose"
+
+    return {
+        "softness": softness,
+        "brightness": brightness,
+        "energy": energy,
+        "warmth": warmth,
+        "density": density,
+        "aggressiveness": aggressiveness,
+        "dynamics": dynamics,
+        "harmonic_richness": harmonic_richness,
+        "ambience": ambience,
+        "groove": groove,
+    }
+
+
+def build_music_dna(path: str, bpm: float, chords: list) -> dict:
+    from app.energy import analyze_energy_profile
+
+    metadata = build_music_metadata(path=path, prompt="", bpm=bpm)
+    character = analyze_audio_character(path)
+    energy = analyze_energy_profile(path)
+
+    return {
+        "metadata": metadata,
+        "character": character,
+        "energy": energy,
+        "bpm": bpm,
+        "chords": chords,
+    }
+
+
+def generate_music_insight(character: dict) -> str:
+    insights = []
+
+    if character.get("warmth") in {"high", "warm"}:
+        insights.append("Warm and intimate sound")
+
+    if character.get("energy") == "high":
+        insights.append("Energetic and engaging")
+
+    if character.get("groove") == "tight":
+        insights.append("Rhythmically tight")
+
+    if not insights:
+        insights.append("Balanced overall sonic character")
+
+    return " • ".join(insights)
+
+
+def enhance_prompt(base_prompt: str, character: dict) -> str:
+    additions = []
+
+    if character.get("warmth") in {"high", "warm"}:
+        additions.append("warm tones")
+
+    if character.get("brightness") in {"low", "dark"}:
+        additions.append("soft and mellow")
+
+    if character.get("energy") == "high":
+        additions.append("high energy")
+
+    if additions:
+        return base_prompt + ", " + ", ".join(additions)
+
+    return base_prompt
+
+
+def suggest_actions(character: dict) -> list:
+    suggestions = []
+
+    if character.get("energy") == "low":
+        suggestions.append("Try increasing energy")
+
+    if character.get("brightness") in {"high", "bright"}:
+        suggestions.append("Try a lo-fi transformation")
+
+    if character.get("aggressiveness") == "high":
+        suggestions.append("Try an ambient style")
+
+    return suggestions
+
+
 def build_music_metadata(path: str, prompt: str, bpm: float) -> dict:
     _ = prompt
     y, sr = librosa.load(path, sr=None, mono=True)

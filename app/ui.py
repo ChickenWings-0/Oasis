@@ -8,7 +8,10 @@ import gradio as gr
 from app.config import OUTPUT_DIR
 from app.analysis import detect_bpm, detect_key
 from app.chords import detect_chords
-from app.generate import generate_music_clip as generate_music
+from app.difficulty import detect_difficulty
+from app.energy import analyze_energy_profile
+from app.explain import explain_song
+from app.generate import MOOD_PROMPTS, generate_music_clip as generate_music
 from app.humming import (
     extract_melody_events,
     preprocess_humming_wav,
@@ -16,8 +19,16 @@ from app.humming import (
     save_melody_events_json,
     save_melody_events_midi,
 )
-from app.music_logic import enrich_metadata_with_analysis
+from app.music_logic import (
+    analyze_audio_character,
+    build_music_dna,
+    enrich_metadata_with_analysis,
+    generate_music_insight,
+    suggest_actions,
+)
 from app.separation import separate_audio
+from app.style_transfer import apply_style_transfer
+from app.strum import analyze_strumming
 from app.tabs import generate_tabs_data
 
 
@@ -138,26 +149,41 @@ def run_audio_analysis(audio_path: str):
     if not audio_path:
         message = "Please upload an audio file before analysis."
         gr.Warning(message)
-        return message, "", "", "", "", "", "", "", "", ""
+        return message, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""
 
     input_path = Path(audio_path)
     if input_path.suffix.lower() not in {".wav", ".mp3"}:
         message = "Invalid format. Please upload a WAV or MP3 file."
         gr.Warning(message)
-        return message, "", "", "", "", "", "", "", "", ""
+        return message, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""
 
     try:
         bpm_result = detect_bpm(path=input_path)
         bpm_value = bpm_result.get("bpm", "")
         key_result = detect_key(path=input_path)
         chords = detect_chords(path=input_path)
+        strum_result = analyze_strumming(path=input_path)
+
+        resolved_bpm = float(bpm_value) if bpm_value else 120.0
+        dna = build_music_dna(str(input_path), resolved_bpm, chords)
+        character = dna["character"]
+        energy_profile = dna["energy"]
+
+        character_text = "\n".join([
+            f"• {k.replace('_',' ').title()}: {v}"
+            for k, v in character.items()
+        ])
+
+        insight_text = generate_music_insight(character)
+        suggestions = suggest_actions(character)
+        suggestions_text = "\n".join(suggestions) if suggestions else "No changes suggested."
 
         prompt = "default music prompt"
         analysis_data = enrich_metadata_with_analysis(
             str(input_path),
             prompt,
             chords,
-            float(bpm_value) if bpm_value else 120.0
+            resolved_bpm
         )
         metadata = analysis_data["metadata"]
         chord_groups = analysis_data["chords"]
@@ -176,12 +202,36 @@ def run_audio_analysis(audio_path: str):
         guitar_tabs_text = " | ".join(clean_tabs)
         keyboard_notes_text = ", ".join(["-".join(notes) for notes in keyboard_notes])
         metadata_text = (
-            f"Mood: {metadata.get('mood')}\n"
-            f"Tempo: {metadata.get('tempo')}\n"
+            f"Mood: {metadata.get('mood')}\n\n"
+            f"Tempo: {metadata.get('tempo')}\n\n"
             f"Genre: {metadata.get('genre')}"
         )
-        chord_groups_text = f"Major: {chord_groups['major']}, Minor: {chord_groups['minor']}"
+        chord_groups_text = (
+            f"Major: {chord_groups['major']}\n"
+            f"Minor: {chord_groups['minor']}"
+        )
         bassline_text = ", ".join(bassline)
+        strum_count = str(strum_result.get("count", ""))
+        strum_pattern = str(strum_result.get("pattern", ""))
+        difficulty = detect_difficulty(
+            float(bpm_value),
+            chords,
+            strum_pattern
+        )
+        explanation = explain_song(
+            resolved_bpm,
+            key_text,
+            scale_text,
+            chords,
+            strum_pattern,
+            character=character,
+        )
+
+        energy_text = "\n".join([
+            f"{item['start']}-{item['end']}s: {item['label']}"
+            for item in energy_profile
+        ])
+        explanation_text = explanation.replace(". ", ".\n\n").strip()
 
         return (
             "Audio analysis complete.",
@@ -194,13 +244,21 @@ def run_audio_analysis(audio_path: str):
             metadata_text,
             chord_groups_text,
             bassline_text,
+            strum_count,
+            strum_pattern,
+            difficulty,
+            explanation_text,
+            energy_text,
+            character_text,
+            insight_text,
+            suggestions_text,
         )
     except Exception as e:
         import traceback
         traceback.print_exc()
         import gradio as gr
         gr.Error(f"Audio analysis failed: {str(e)}")
-        return str(e), "", "", "", "", "", "", "", "", ""
+        return str(e), "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""
 
 
 def run_section_tempo(audio_path, table_data):
@@ -271,20 +329,76 @@ def set_preset_ambient() -> str:
     return "Ambient relaxing soundscape with soft pads and slow evolving textures"
 
 
+def update_prompt_from_mood(mood, current_text):
+    if mood == "Custom":
+        return current_text
+
+    return MOOD_PROMPTS.get(mood, current_text)
+
+
+def run_style_transfer(audio_path, style):
+    if not audio_path:
+        return "Please upload an audio file.", None
+
+    style_map = {
+        "Lo-fi Chill": "lofi_chill",
+        "Bass Boost": "bass_boost",
+        "EDM / Club": "edm_club",
+        "Cinematic": "cinematic",
+        "Ambient / Space": "ambient_space",
+        "Vocal Focus": "vocal_focus",
+        "Acoustic Soft": "acoustic_soft",
+        "Vintage Radio": "vintage_radio",
+        "Party Mode": "party_mode",
+        "Night Drive": "night_drive",
+        "Hyperpop": "hyperpop",
+        "Headphone Immersion": "headphone_immersion",
+        "Background Chill": "background_chill",
+        "Studio Clean": "studio_clean",
+        "Epic Trailer": "epic_trailer",
+        "Dreamy": "dreamy",
+        "Underwater": "underwater",
+        "Telephone Effect": "telephone",
+        "Hall Concert": "hall_concert",
+        "Mono Classic": "mono_classic",
+    }
+    style_key = style_map.get(style, "studio_clean")
+
+    try:
+        output = apply_style_transfer(audio_path, style_key)
+        return "Transformation complete.", output
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        import gradio as gr
+        gr.Error(str(e))
+        return f"Error: {str(e)}", None
+
+
 def build_ui() -> gr.Blocks:
     with gr.Blocks(title="Oasis Music Module") as demo:
         gr.Markdown("# Oasis Music Module")
 
-        with gr.Tab("Text -> Music"):
+        with gr.Tab("🎼 AI Music Generator"):
+            gr.Markdown("### 🎼 Choose Style or Write Your Own Prompt")
+
+            mood_dropdown = gr.Dropdown(
+                choices=["Custom"] + list(MOOD_PROMPTS.keys()),
+                value="Custom",
+                label="Quick Style Presets"
+            )
+
             prompt_input = gr.Textbox(
-                label="Prompt",
-                value="Lo-fi chill beat with soft piano and warm bass, relaxing nighttime mood",
+                label="Custom Prompt",
+                placeholder="Describe the music you want to generate...",
                 lines=3,
             )
-            with gr.Row():
-                preset_lofi = gr.Button("Lo-fi")
-                preset_cinematic = gr.Button("Cinematic")
-                preset_ambient = gr.Button("Ambient")
+
+            gr.Markdown(
+                "👉 Select a preset to auto-fill the prompt\n"
+                "👉 Or choose 'Custom' to write your own"
+            )
 
             duration_input = gr.Slider(
                 minimum=2,
@@ -298,9 +412,11 @@ def build_ui() -> gr.Blocks:
             output_audio = gr.Audio(label="Generated Audio", type="filepath")
             output_wav_file = gr.File(label="Download WAV")
 
-            preset_lofi.click(fn=set_preset_lofi, inputs=None, outputs=prompt_input)
-            preset_cinematic.click(fn=set_preset_cinematic, inputs=None, outputs=prompt_input)
-            preset_ambient.click(fn=set_preset_ambient, inputs=None, outputs=prompt_input)
+            mood_dropdown.change(
+                fn=update_prompt_from_mood,
+                inputs=[mood_dropdown, prompt_input],
+                outputs=[prompt_input]
+            )
 
             (
                 generate_btn.click(
@@ -316,7 +432,7 @@ def build_ui() -> gr.Blocks:
                 )
             )
 
-        with gr.Tab("Humming -> Analysis"):
+        with gr.Tab("🎤 Hum Your Idea"):
             gr.Markdown("Tip: Use short humming clips (5–10 seconds) for best results")
             humming_input = gr.File(label="Upload Humming WAV", file_types=[".wav"], type="filepath")
             analyze_btn = gr.Button("Analyze")
@@ -341,7 +457,7 @@ def build_ui() -> gr.Blocks:
                 )
             )
 
-        with gr.Tab("Instrument Separation"):
+        with gr.Tab("🎚️ Split the Song"):
             separation_input = gr.File(label="Upload Audio (WAV/MP3)", file_types=[".wav", ".mp3"], type="filepath")
             separation_btn = gr.Button("Extract Instruments")
             separation_status_output = gr.Textbox(label="Status", interactive=False)
@@ -390,23 +506,68 @@ def build_ui() -> gr.Blocks:
                 )
             )
 
-        with gr.Tab("Audio Analysis"):
+        with gr.Tab("🧠 Understand Your Music"):
             analysis_input = gr.File(label="Upload Audio (WAV/MP3)", file_types=[".wav", ".mp3"], type="filepath")
             analysis_btn = gr.Button("Analyze Audio")
             analysis_status_output = gr.Textbox(label="Status", interactive=False)
-            analysis_bpm_output = gr.Textbox(label="BPM", interactive=False)
-            analysis_key_output = gr.Textbox(label="Key", interactive=False)
-            analysis_scale_output = gr.Textbox(label="Scale", interactive=False)
-            analysis_chords_output = gr.Textbox(label="Chords", interactive=False)
-            guitar_tabs_output = gr.Textbox(label="Guitar Tabs", interactive=False)
+
+            gr.Markdown("### 🎧 Core Analysis")
+            analysis_bpm_output = gr.Textbox(label="Tempo (BPM)", interactive=False)
+            analysis_key_output = gr.Textbox(label="Key Signature", interactive=False)
+            analysis_scale_output = gr.Textbox(label="Scale Type", interactive=False)
+
+            gr.Markdown("### 🎼 Musical Structure")
+            analysis_chords_output = gr.Textbox(label="Detected Chords", interactive=False)
+            guitar_tabs_output = gr.Textbox(label="Guitar Tabs (Playable)", interactive=False)
             keyboard_notes_output = gr.Textbox(label="Keyboard Notes", interactive=False)
+
+            gr.Markdown("### 🧠 Intelligence")
             metadata_output = gr.Textbox(label="Metadata", interactive=False)
+            analysis_difficulty_output = gr.Textbox(label="Difficulty", interactive=False)
+
+            gr.Markdown("### 🎸 Rhythm")
+            analysis_strum_count_output = gr.Textbox(label="Strum Count", interactive=False)
+            analysis_strum_pattern_output = gr.Textbox(label="Strumming Style", interactive=False)
+
+            gr.Markdown("### 📊 Energy Profile")
+            analysis_energy_output = gr.Textbox(
+                label="Energy Timeline",
+                interactive=False,
+                lines=6
+            )
+
+            gr.Markdown("### 🎚️ Sound Character")
+
+            analysis_character_output = gr.Textbox(
+                label="Audio Character Profile",
+                interactive=False,
+                lines=8
+            )
+
+            gr.Markdown("### 🧠 Music Insight")
+
+            analysis_insight_output = gr.Textbox(
+                label="Music Insight",
+                interactive=False
+            )
+
+            gr.Markdown("### 💡 Suggestions")
+
+            analysis_suggestions_output = gr.Textbox(
+                label="Suggested Enhancements",
+                interactive=False
+            )
+
+            gr.Markdown("### 🎼 Harmonic Analysis")
             chord_groups_output = gr.Textbox(label="Chord Groups", interactive=False)
             bassline_output = gr.Textbox(label="Bassline", interactive=False)
 
+            gr.Markdown("### 💬 Explanation")
+            analysis_explanation_output = gr.Textbox(label="Explanation", interactive=False, lines=6)
+
             (
                 analysis_btn.click(
-                    fn=lambda: "Analyzing audio...",
+                    fn=lambda: "Analyzing audio... please wait",
                     inputs=None,
                     outputs=[analysis_status_output],
                     show_progress="hidden",
@@ -424,12 +585,20 @@ def build_ui() -> gr.Blocks:
                         metadata_output,
                         chord_groups_output,
                         bassline_output,
+                        analysis_strum_count_output,
+                        analysis_strum_pattern_output,
+                        analysis_difficulty_output,
+                        analysis_explanation_output,
+                        analysis_energy_output,
+                        analysis_character_output,
+                        analysis_insight_output,
+                        analysis_suggestions_output,
                     ],
                     show_progress="full",
                 )
             )
 
-        with gr.Tab("Tempo Control"):
+        with gr.Tab("🎛️ Control the Groove"):
             audio_input = gr.File(label="Upload Audio", type="filepath")
             sections_table = gr.Dataframe(
                 headers=["start", "end", "bpm"],
@@ -450,6 +619,68 @@ def build_ui() -> gr.Blocks:
                 fn=run_section_tempo,
                 inputs=[audio_input, sections_table],
                 outputs=[output_audio],
+            )
+
+        with gr.Tab("🎨 Transform Your Sound"):
+
+            gr.Markdown(
+                "### 🎨 Transform Your Sound\n"
+                "Change the vibe of your audio instantly using style presets.\n\n"
+                "👉 Upload a track\n"
+                "👉 Choose a style\n"
+                "👉 Transform it"
+            )
+
+            style_input = gr.File(
+                label="Upload Audio (WAV/MP3)",
+                type="filepath"
+            )
+
+            style_dropdown = gr.Dropdown(
+                choices=[
+                    "Lo-fi Chill",
+                    "Bass Boost",
+                    "EDM / Club",
+                    "Cinematic",
+                    "Ambient / Space",
+                    "Vocal Focus",
+                    "Acoustic Soft",
+                    "Vintage Radio",
+                    "Party Mode",
+                    "Night Drive",
+                    "Hyperpop",
+                    "Headphone Immersion",
+                    "Background Chill",
+                    "Studio Clean",
+                    "Epic Trailer",
+                    "Dreamy",
+                    "Underwater",
+                    "Telephone Effect",
+                    "Hall Concert",
+                    "Mono Classic",
+                ],
+                value="Lo-fi Chill",
+                label="Select Style"
+            )
+
+            style_btn = gr.Button("🎨 Transform Audio")
+
+            style_status = gr.Textbox(
+                label="Status",
+                interactive=False
+            )
+
+            style_output = gr.Audio(label="Styled Output")
+
+            style_btn.click(
+                fn=lambda: ("Transforming audio... please wait", None),
+                inputs=None,
+                outputs=[style_status, style_output],
+                show_progress="hidden",
+            ).then(
+                fn=run_style_transfer,
+                inputs=[style_input, style_dropdown],
+                outputs=[style_status, style_output]
             )
 
     return demo
