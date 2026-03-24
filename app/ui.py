@@ -10,6 +10,7 @@ from app.analysis import detect_bpm, detect_key
 from app.chords import detect_chords
 from app.difficulty import detect_difficulty
 from app.energy import analyze_energy_profile
+from app.equalizer import EQ_PRESETS, run_equalizer
 from app.explain import explain_song
 from app.generate import MOOD_PROMPTS, generate_music_clip as generate_music
 from app.humming import (
@@ -27,7 +28,6 @@ from app.music_logic import (
     suggest_actions,
 )
 from app.separation import separate_audio
-from app.style_transfer import apply_style_transfer
 from app.strum import analyze_strumming
 from app.tabs import generate_tabs_data
 
@@ -336,37 +336,19 @@ def update_prompt_from_mood(mood, current_text):
     return MOOD_PROMPTS.get(mood, current_text)
 
 
-def run_style_transfer(audio_path, style):
+def update_eq_from_preset(preset_name):
+    return EQ_PRESETS.get(preset_name, EQ_PRESETS["Flat"])
+
+
+def run_equalizer_ui(audio_path, g1, g2, g3, g4, g5, g6, g7, g8):
     if not audio_path:
         return "Please upload an audio file.", None
 
-    style_map = {
-        "Lo-fi Chill": "lofi_chill",
-        "Bass Boost": "bass_boost",
-        "EDM / Club": "edm_club",
-        "Cinematic": "cinematic",
-        "Ambient / Space": "ambient_space",
-        "Vocal Focus": "vocal_focus",
-        "Acoustic Soft": "acoustic_soft",
-        "Vintage Radio": "vintage_radio",
-        "Party Mode": "party_mode",
-        "Night Drive": "night_drive",
-        "Hyperpop": "hyperpop",
-        "Headphone Immersion": "headphone_immersion",
-        "Background Chill": "background_chill",
-        "Studio Clean": "studio_clean",
-        "Epic Trailer": "epic_trailer",
-        "Dreamy": "dreamy",
-        "Underwater": "underwater",
-        "Telephone Effect": "telephone",
-        "Hall Concert": "hall_concert",
-        "Mono Classic": "mono_classic",
-    }
-    style_key = style_map.get(style, "studio_clean")
-
     try:
-        output = apply_style_transfer(audio_path, style_key)
-        return "Transformation complete.", output
+        output = run_equalizer(audio_path, g1, g2, g3, g4, g5, g6, g7, g8)
+        if not output:
+            return "Equalization failed. Please try a shorter clip.", None
+        return "Equalization complete.", output
 
     except Exception as e:
         import traceback
@@ -621,66 +603,64 @@ def build_ui() -> gr.Blocks:
                 outputs=[output_audio],
             )
 
-        with gr.Tab("🎨 Transform Your Sound"):
+        with gr.Tab("🎛️ Sound Equalizer"):
 
-            gr.Markdown(
-                "### 🎨 Transform Your Sound\n"
-                "Change the vibe of your audio instantly using style presets.\n\n"
-                "👉 Upload a track\n"
-                "👉 Choose a style\n"
-                "👉 Transform it"
+            eq_input = gr.File(label="Upload Audio (WAV/MP3)", type="filepath")
+
+            eq_preset_dropdown = gr.Dropdown(
+                choices=list(EQ_PRESETS.keys()),
+                value="Flat",
+                label="EQ Preset"
             )
 
-            style_input = gr.File(
-                label="Upload Audio (WAV/MP3)",
-                type="filepath"
-            )
+            eq_band_1 = gr.Slider(-12, 12, value=0, label="60 Hz")
+            eq_band_2 = gr.Slider(-12, 12, value=0, label="150 Hz")
+            eq_band_3 = gr.Slider(-12, 12, value=0, label="400 Hz")
+            eq_band_4 = gr.Slider(-12, 12, value=0, label="1 kHz")
+            eq_band_5 = gr.Slider(-12, 12, value=0, label="2.4 kHz")
+            eq_band_6 = gr.Slider(-12, 12, value=0, label="6 kHz")
+            eq_band_7 = gr.Slider(-12, 12, value=0, label="12 kHz")
+            eq_band_8 = gr.Slider(-12, 12, value=0, label="16 kHz")
 
-            style_dropdown = gr.Dropdown(
-                choices=[
-                    "Lo-fi Chill",
-                    "Bass Boost",
-                    "EDM / Club",
-                    "Cinematic",
-                    "Ambient / Space",
-                    "Vocal Focus",
-                    "Acoustic Soft",
-                    "Vintage Radio",
-                    "Party Mode",
-                    "Night Drive",
-                    "Hyperpop",
-                    "Headphone Immersion",
-                    "Background Chill",
-                    "Studio Clean",
-                    "Epic Trailer",
-                    "Dreamy",
-                    "Underwater",
-                    "Telephone Effect",
-                    "Hall Concert",
-                    "Mono Classic",
+            eq_apply_btn = gr.Button("Apply Equalizer")
+
+            eq_status = gr.Textbox(label="Status", interactive=False)
+            eq_output = gr.Audio(label="Equalized Output")
+
+            eq_preset_dropdown.change(
+                fn=update_eq_from_preset,
+                inputs=[eq_preset_dropdown],
+                outputs=[
+                    eq_band_1,
+                    eq_band_2,
+                    eq_band_3,
+                    eq_band_4,
+                    eq_band_5,
+                    eq_band_6,
+                    eq_band_7,
+                    eq_band_8,
                 ],
-                value="Lo-fi Chill",
-                label="Select Style"
             )
 
-            style_btn = gr.Button("🎨 Transform Audio")
-
-            style_status = gr.Textbox(
-                label="Status",
-                interactive=False
-            )
-
-            style_output = gr.Audio(label="Styled Output")
-
-            style_btn.click(
-                fn=lambda: ("Transforming audio... please wait", None),
+            eq_apply_btn.click(
+                fn=lambda: ("Applying EQ... please wait", None),
                 inputs=None,
-                outputs=[style_status, style_output],
+                outputs=[eq_status, eq_output],
                 show_progress="hidden",
             ).then(
-                fn=run_style_transfer,
-                inputs=[style_input, style_dropdown],
-                outputs=[style_status, style_output]
+                fn=run_equalizer_ui,
+                inputs=[
+                    eq_input,
+                    eq_band_1,
+                    eq_band_2,
+                    eq_band_3,
+                    eq_band_4,
+                    eq_band_5,
+                    eq_band_6,
+                    eq_band_7,
+                    eq_band_8,
+                ],
+                outputs=[eq_status, eq_output],
             )
 
     return demo
@@ -688,7 +668,7 @@ def build_ui() -> gr.Blocks:
 
 def main() -> None:
     app = build_ui()
-    app.launch()
+    app.launch(share=False)
 
 
 if __name__ == "__main__":

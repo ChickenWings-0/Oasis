@@ -68,7 +68,12 @@ def change_bpm(path: str | Path, target_bpm: float) -> str:
     if original_bpm <= 0:
         raise RuntimeError("Unable to estimate original BPM")
 
-    rate = float(original_bpm) / float(target_bpm)
+    rate = float(target_bpm) / float(original_bpm)
+
+    print(f"Original BPM: {original_bpm}")
+    print(f"Target BPM: {target_bpm}")
+    print(f"Rate: {rate}")
+
     stretched = librosa.effects.time_stretch(waveform, rate=rate)
 
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -105,8 +110,13 @@ def apply_section_tempo(path: str | Path, sections: list) -> str:
     if not sections:
         raise ValueError("sections cannot be empty")
 
+    original_bpm = _estimate_tempo(waveform, sample_rate)
+    if original_bpm <= 0:
+        raise RuntimeError("Unable to estimate original BPM from full audio")
+
     full_duration = len(waveform) / float(sample_rate)
     output_segments: list[np.ndarray] = []
+    rate_cache: dict[float, float] = {}
 
     for section in sections:
         start_sec = float(section.get("start", 0.0))
@@ -128,14 +138,26 @@ def apply_section_tempo(path: str | Path, sections: list) -> str:
         if segment.size == 0:
             continue
 
-        segment_bpm = _estimate_tempo(segment, sample_rate)
-        if segment_bpm <= 0:
-            # Fallback for silent or ambiguous sections.
-            output_segments.append(segment)
-            continue
+        if target_bpm not in rate_cache:
+            rate_cache[target_bpm] = float(target_bpm) / float(original_bpm)
 
-        rate = float(segment_bpm) / float(target_bpm)
+        rate = rate_cache[target_bpm]
+
+        print(f"Original BPM: {original_bpm}")
+        print(f"Target BPM: {target_bpm}")
+        print(f"Rate: {rate}")
+
         stretched_segment = librosa.effects.time_stretch(segment, rate=rate)
+        expected_len = max(1, int(len(segment) / rate))
+        stretched_segment = stretched_segment[:expected_len]
+
+        if len(stretched_segment) < expected_len:
+            stretched_segment = np.pad(
+                stretched_segment,
+                (0, expected_len - len(stretched_segment)),
+                mode="constant",
+            )
+
         output_segments.append(stretched_segment)
 
     if not output_segments:
