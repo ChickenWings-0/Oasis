@@ -1,51 +1,17 @@
-import json
+from datetime import datetime
 from pathlib import Path
 
 from generator import generate_frames
+from music_integration import combine_video_music, generate_music, get_music_style
 from renderer import create_video_from_frames
-from utils import save_frames
-
-
-CONFIG_PATH = Path("config.json")
-
-
-def load_config() -> dict:
-    if not CONFIG_PATH.exists():
-        return {}
-    with CONFIG_PATH.open("r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def save_config(config: dict) -> None:
-    with CONFIG_PATH.open("w", encoding="utf-8") as f:
-        json.dump(config, f, indent=2)
-
-
-def get_output_dir() -> str:
-    config = load_config()
-    output_dir = config.get("output_dir")
-
-    if not output_dir:
-        output_dir = input("Enter output directory (e.g., D:/OASIS_OUTPUTS/frames): ").strip()
-        if not output_dir:
-            output_dir = "outputs/frames/"
-        config["output_dir"] = output_dir
-        save_config(config)
-        return output_dir
-
-    change = input("Change output directory? (y/n): ").strip().lower()
-    if change == "y":
-        new_output_dir = input("Enter output directory (e.g., D:/OASIS_OUTPUTS/frames): ").strip()
-        if new_output_dir:
-            config["output_dir"] = new_output_dir
-            save_config(config)
-            output_dir = new_output_dir
-
-    return output_dir
+from utils import get_output_dir, save_frames
 
 
 def main() -> None:
-    frame_dir = get_output_dir()
+    base_dir = get_output_dir()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    frame_dir = base_dir / "frames" / f"run_{timestamp}"
+    frame_dir.mkdir(parents=True, exist_ok=True)
 
     prompt = input("Enter prompt: ").strip()
     if not prompt:
@@ -76,13 +42,42 @@ def main() -> None:
         width, height = 256, 256
 
     try:
-        frames = generate_frames(prompt, num_frames, motion_level, style, width=width, height=height)
-        save_frames(frames, frame_dir)
+        motion_level = "medium"
+        style = "cinematic"
+        frames = generate_frames(
+            prompt=prompt,
+            num_frames=num_frames,
+            motion_level=motion_level,
+            style=style,
+            width=width,
+            height=height,
+        )
+        save_frames(frames, str(frame_dir))
 
-        video_path = str(Path(frame_dir).parent / "output.mp4")
-        create_video_from_frames(frame_dir, video_path)
+        video_dir = base_dir / "videos"
+        video_dir.mkdir(parents=True, exist_ok=True)
+
+        video_path = str(video_dir / f"video_{timestamp}.mp4")
+        create_video_from_frames(str(frame_dir), video_path)
 
         print(f"Video saved at: {video_path}")
+
+        choice = input("Generate music? (y/n): ").strip().lower()
+
+        if choice == "y":
+            suggested_style = get_music_style(prompt)
+            style = input(f"Select music style (default: {suggested_style}): ").strip()
+
+            if not style:
+                style = suggested_style
+
+            audio_path = generate_music(prompt, style)
+
+            final_output = str(video_dir / f"final_{timestamp}.mp4")
+
+            final_video_path = combine_video_music(video_path, audio_path, final_output)
+
+            print(f"Final video with music saved at: {final_video_path}")
     except Exception as exc:
         print(f"Error: {exc}")
 

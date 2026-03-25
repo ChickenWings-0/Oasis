@@ -1,7 +1,27 @@
+import json
 from pathlib import Path
 from typing import List, Optional
 
 from PIL import Image
+
+
+CONFIG_PATH = Path("config.json")
+
+
+def get_output_dir() -> Path:
+    if not CONFIG_PATH.exists():
+        return Path("D:/OASIS_OUTPUTS")
+
+    with open(CONFIG_PATH, "r") as f:
+        config = json.load(f)
+
+    return Path(config.get("output_dir", "D:/OASIS_OUTPUTS"))
+
+
+def set_output_dir(new_path: str) -> None:
+    config = {"output_dir": new_path}
+    with open(CONFIG_PATH, "w") as f:
+        json.dump(config, f, indent=4)
 
 
 def save_frames(frames: List[Image.Image], output_dir: Optional[str] = None) -> None:
@@ -9,7 +29,7 @@ def save_frames(frames: List[Image.Image], output_dir: Optional[str] = None) -> 
     if not frames:
         raise ValueError("frames cannot be empty.")
 
-    target_dir = Path(output_dir) if output_dir else Path("outputs/frames")
+    target_dir = Path(output_dir) if output_dir else (get_output_dir() / "frames")
     target_dir.mkdir(parents=True, exist_ok=True)
 
     for i, frame in enumerate(frames):

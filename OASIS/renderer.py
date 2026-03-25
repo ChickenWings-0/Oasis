@@ -1,6 +1,22 @@
 from pathlib import Path
+import subprocess
 
 import cv2
+
+
+def convert_to_web_video(input_path: str, output_path: str) -> None:
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        input_path,
+        "-vcodec",
+        "libx264",
+        "-acodec",
+        "aac",
+        output_path,
+    ]
+    subprocess.run(cmd, check=True)
 
 
 def create_video_from_frames(frame_dir: str, output_path: str, fps: int = 6) -> None:
@@ -20,9 +36,10 @@ def create_video_from_frames(frame_dir: str, output_path: str, fps: int = 6) -> 
 
     output_file = Path(output_path)
     output_file.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = str(output_file).replace(".mp4", "_temp.mp4")
 
     writer = cv2.VideoWriter(
-        str(output_file),
+        temp_path,
         cv2.VideoWriter_fourcc(*"mp4v"),
         fps,
         (width, height),
@@ -39,3 +56,5 @@ def create_video_from_frames(frame_dir: str, output_path: str, fps: int = 6) -> 
             writer.write(frame)
     finally:
         writer.release()
+
+    convert_to_web_video(temp_path, str(output_file))
