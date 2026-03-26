@@ -1,0 +1,161 @@
+# ============================================================================
+# CRITICAL: ENVIRONMENT & SECRETS - NEVER COMMIT THESE
+# ============================================================================
+.env
+.env.*
+!.env.example
+!.env.sample
+*.pem
+*.key
+*.crt
+.secrets/
+secrets.yaml
+config.local.py
+
+# ============================================================================
+# IDE & EDITOR FILES
+# ============================================================================
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.emacs*
+.atom/
+.project
+.pydevproject
+.settings/
+*.iml
+*.iws
+*.ipr
+*.swp
+*.swo
+*~
+.#*
+
+# ============================================================================
+# OPERATING SYSTEMS
+# ============================================================================
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.directory
+$RECYCLE.BIN/
+.TemporaryItems
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# ============================================================================
+# PYTHON & VIRTUAL ENVIRONMENTS
+# ============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.venv/
+venv/
+ENV/
+env/
+
+# ============================================================================
+# TESTING & COVERAGE
+# ============================================================================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+*.cover
+nosetests.xml
+coverage.xml
+.cache
+
+# ============================================================================
+# TYPE CHECKING
+# ============================================================================
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pylint.d/
+
+# ============================================================================
+# DATABASE FILES
+# ============================================================================
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+auth_db.db
+project.db
+project_service.db
+
+# ============================================================================
+# LOGS & TEMPORARY FILES
+# ============================================================================
+*.log
+logs/
+tmp/
+temp/
+
+# ============================================================================
+# NODE & PACKAGE MANAGERS
+# ============================================================================
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+poetry.lock
+Pipfile.lock
+
+# ============================================================================
+# DOCUMENTATION BUILD
+# ============================================================================
+site/
+docs/_build/
+
+# ============================================================================
+# DEVELOPMENT TOOLS
+# ============================================================================
+.python-version
+.envrc
+.direnv
+.ipynb_checkpoints
+*.ipynb
+
+# ============================================================================
+# DOCKER & CONTAINERS
+# ============================================================================
+docker-compose.override.yml
+
+# ============================================================================
+# PROJECT-SPECIFIC
+# ============================================================================
+test-frontend.html
+.streamlit/
