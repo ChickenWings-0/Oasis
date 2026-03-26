@@ -4,12 +4,14 @@ import subprocess
 import cv2
 
 
-def convert_to_web_video(input_path: str, output_path: str) -> None:
+def convert_to_web_video(input_path: str, output_path: str, fps: int = 14) -> None:
     cmd = [
         "ffmpeg",
         "-y",
         "-i",
         input_path,
+        "-r",
+        str(fps),
         "-vcodec",
         "libx264",
         "-acodec",
@@ -19,7 +21,7 @@ def convert_to_web_video(input_path: str, output_path: str) -> None:
     subprocess.run(cmd, check=True)
 
 
-def create_video_from_frames(frame_dir: str, output_path: str, fps: int = 6) -> None:
+def create_video_from_frames(frame_dir: str, output_path: str, fps: int = 14) -> None:
     frame_path = Path(frame_dir)
     if not frame_path.exists() or not frame_path.is_dir():
         raise ValueError(f"Frame directory not found: {frame_dir}")
@@ -57,4 +59,4 @@ def create_video_from_frames(frame_dir: str, output_path: str, fps: int = 6) -> 
     finally:
         writer.release()
 
-    convert_to_web_video(temp_path, str(output_file))
+    convert_to_web_video(temp_path, str(output_file), fps=fps)

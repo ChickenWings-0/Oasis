@@ -1,15 +1,35 @@
 import random
 from typing import List
 
+import numpy as np
 import streamlit as st
 import torch
 from diffusers import StableDiffusionImg2ImgPipeline, StableDiffusionPipeline
 from PIL import Image
-from motion import apply_camera_motion
 from prompt_engine import PromptSchedule
 
 
 MODEL_ID = "runwayml/stable-diffusion-v1-5"
+
+
+def shift_frame_for_motion(frame, motion_type, frame_index, total_frames):
+    width, height = frame.size
+    frame_np = np.array(frame)
+
+    shift = int((frame_index / total_frames) * 40)
+    if shift <= 0:
+        return frame
+
+    if motion_type == "pan_right":
+        shifted = np.roll(frame_np, -shift, axis=1)
+        shifted[:, -shift:, :] = np.random.randint(0, 255, (height, shift, 3), dtype=np.uint8)
+    elif motion_type == "pan_left":
+        shifted = np.roll(frame_np, shift, axis=1)
+        shifted[:, :shift, :] = np.random.randint(0, 255, (height, shift, 3), dtype=np.uint8)
+    else:
+        return frame
+
+    return Image.fromarray(shifted)
 
 
 @st.cache_resource
@@ -67,29 +87,28 @@ def generate_frames(
     if style == "anime":
         style_prompt = "anime style, cel shading, bold outlines, flat shading, vibrant colors, 2D animation frame"
         negative_prompt = "photorealistic, realistic lighting, shadows, dull colors"
-        guidance_scale = 8.5
+        guidance_scale = 6.5
         num_inference_steps = 35
         style_strength = 0.65
     elif style == "realistic":
         style_prompt = "photorealistic, natural lighting, DSLR, 35mm lens, subtle colors"
         negative_prompt = "anime, cartoon, illustration, exaggerated colors"
-        guidance_scale = 5.5
+        guidance_scale = 6.5
         num_inference_steps = 28
         style_strength = 0.5
     else:
         style_prompt = "cinematic lighting, high contrast, dramatic shadows, film still, volumetric lighting, film grain"
         negative_prompt = "flat lighting, cartoon, anime"
-        guidance_scale = 7.5
+        guidance_scale = 6.5
         num_inference_steps = 32
         style_strength = 0.6
-    base_strength = style_strength
+    negative_prompt += ", blurry, distorted, warped, deformed, text mutation"
     if motion_level == "low":
-        strength = base_strength - 0.1
-    elif motion_level == "high":
-        strength = base_strength + 0.1
+        adjusted_strength = 0.20
+    elif motion_level == "medium":
+        adjusted_strength = 0.24
     else:
-        strength = base_strength
-    strength = max(0.3, min(0.8, strength))
+        adjusted_strength = 0.28
 
     frames: List[Image.Image] = []
     for i in range(num_frames):
@@ -98,12 +117,9 @@ def generate_frames(
             current_prompt = prompt_schedule.get_prompt(i)
         else:
             current_prompt = prompt
-        enhanced_prompt = f"{current_prompt}, {style_prompt}, same scene, same composition, consistent lighting"
-        seed = base_seed + i
+        enhanced_prompt = f"{current_prompt}, {style_prompt}, same scene, consistent composition, stable object, no distortion, clear details"
+        seed = base_seed + i * 2
         generator = torch.Generator(device="cuda").manual_seed(seed)
-        decay = 1.0 - (i / num_frames) * 0.3
-        adjusted_strength = strength * decay
-        adjusted_strength = max(0.32, min(0.5, adjusted_strength))
 
         if i == 0:
             image = text2img_pipe(
@@ -114,13 +130,21 @@ def generate_frames(
                 generator=generator,
                 guidance_scale=guidance_scale,
                 num_inference_steps=num_inference_steps,
+                num_images_per_prompt=1,
+                return_dict=True,
             ).images[0]
-            image = image.resize((width, height), Image.LANCZOS)
+            image = image.resize((width, height))
         else:
-            # Blend prior frame with the first frame to prevent cumulative artifact drift.
-            source_image = Image.blend(frames[-1], frames[0], 0.3)
+            source_image = frames[-1]
+            source_image = shift_frame_for_motion(
+                source_image,
+                motion_type,
+                i,
+                num_frames,
+            )
+            source_image = Image.blend(source_image, frames[0], 0.15)
             # Ensure img2img source uses the configured resolution.
-            source_image = source_image.resize((width, height), Image.LANCZOS)
+            source_image = source_image.resize((width, height))
             image = img2img_pipe(
                 prompt=enhanced_prompt,
                 negative_prompt=negative_prompt,
@@ -129,10 +153,14 @@ def generate_frames(
                 generator=generator,
                 guidance_scale=guidance_scale,
                 num_inference_steps=num_inference_steps,
+                num_images_per_prompt=1,
+                return_dict=True,
             ).images[0]
 
-        image = image.resize((width, height), Image.LANCZOS)
-        image = apply_camera_motion(image, i, num_frames, motion_type)
+        image = image.resize((width, height))
+        image = np.array(image)
+        image = np.clip(image, 0, 255).astype(np.uint8)
+        image = Image.fromarray(image)
         frames.append(image)
 
     return frames

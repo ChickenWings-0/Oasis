@@ -53,10 +53,14 @@ def main() -> None:
     try:
         motion_level = "medium"
         style = "cinematic"
+        motion_type = input(
+            "Select camera motion (none / zoom_in / zoom_out / pan_left / pan_right): "
+        ).strip() or "none"
         frames = generate_frames(
             prompt=prompt,
             num_frames=num_frames,
             motion_level=motion_level,
+            motion_type=motion_type,
             style=style,
             width=width,
             height=height,
