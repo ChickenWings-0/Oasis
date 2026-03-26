@@ -94,7 +94,7 @@ class CommitService:
             raise NotFoundError(f"Commit {commit_id} not found")
         return commit
 
-    def get_branch_history(self, branch_id: int, limit: int = 100) -> list[Commit]:
+    def get_branch_history(self, branch_id: int, skip: int = 0, limit: int = 100) -> list[Commit]:
         """
         Get commit history for a branch
         
@@ -114,7 +114,7 @@ class CommitService:
             raise NotFoundError(f"Branch {branch_id} not found")
         
         # Get commits on branch
-        commits = self.commit_repo.get_commits_by_branch(branch_id, skip=0, limit=limit)
+        commits = self.commit_repo.get_commits_by_branch(branch_id, skip=skip, limit=limit)
         return commits
 
     def get_commit_parent(self, commit_id: str) -> Commit | None:

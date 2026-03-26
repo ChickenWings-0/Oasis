@@ -8,6 +8,7 @@ Supports both JWT tokens and dev mode with X-User-ID header.
 from fastapi import Depends, HTTPException, Header
 from typing import Optional
 import jwt
+import os
 from datetime import datetime, timedelta
 from pydantic import BaseModel
 
@@ -28,22 +29,14 @@ class CurrentUser:
 
 
 # JWT Configuration
-JWT_SECRET_KEY = "your-secret-key"  # TODO: Load from env
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-me-in-production")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
 
 def create_access_token(user_id: int, email: str) -> str:
-    """
-    Create JWT access token
-    
-    Args:
-        user_id: User ID
-        email: User email
-        
-    Returns:
-        JWT token string
-    """
+   # Create JWT access token
+
     payload = {
         "user_id": user_id,
         "email": email,
@@ -57,15 +50,7 @@ def create_access_token(user_id: int, email: str) -> str:
 def verify_token(token: str) -> UserClaims:
     """
     Verify and decode JWT token
-    
-    Args:
-        token: JWT token string
-        
-    Returns:
-        UserClaims with decoded user info
-        
-    Raises:
-        HTTPException: If token invalid or expired
+   
     """
     try:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
@@ -103,15 +88,6 @@ async def get_current_user(
     1. Authorization: Bearer <token> (production)
     2. X-User-ID header (development/testing)
     
-    Args:
-        authorization: Authorization header with Bearer token
-        x_user_id: User ID header (for development)
-        
-    Returns:
-        CurrentUser object with user_id and email
-        
-    Raises:
-        HTTPException: If not authenticated
     """
     # Try JWT token first
     if authorization:

@@ -7,7 +7,7 @@ class ProjectCreate(BaseModel):
     """Schema for creating a new project"""
     name: str = Field(..., min_length=1, max_length=255, description="Project name")
     description: Optional[str] = Field(None, max_length=2000, description="Project description")
-    owner_id: int = Field(..., description="User ID of project owner")
+    owner_id: Optional[int] = Field(None, description="User ID of project owner (auto-set from JWT)")
 
     class Config:
         json_schema_extra = {

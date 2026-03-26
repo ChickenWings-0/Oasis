@@ -225,38 +225,39 @@ class MergeService:
         if not project:
             raise NotFoundError(f"Project {project_id} not found")
         
-        # Get all merges (simplified for MVP)
-        merges = self.merge_repo.get_pending_merges(skip=skip, limit=limit)
+        # Get all merges for this project (all statuses)
+        merges = self.merge_repo.get_merges_by_project(project_id, skip=skip, limit=limit)
         
         return merges
+
+    def approve_merge(self, merge_id: int, user_id: int) -> Merge:
+        """
+        Approve a merge request
         
-        # Determine merge type and execute
-        merge_result = self._determine_merge_type(source, target)
+        AUTHORIZATION: Only project owner can approve merges
         
-        # Create merge record
-        merge_data = MergeCreate(
-            source_branch_id=source_branch_id,
-            target_branch_id=target_branch_id,
-            merge_commit_id=merge_result["merge_commit_id"]
-        )
-        merge = self.merge_repo.create_merge_record(merge_data)
+        Raises:
+        - NotFoundError: Merge doesn't exist
+        - ForbiddenError: User is not project owner
+        - ValidationError: Invalid merge status
+        """
+        merge = self.merge_repo.get_merge_by_id(merge_id)
+        if not merge:
+            raise NotFoundError(f"Merge {merge_id} not found")
         
-        # Update merge status based on result
-        if merge_result["status"] == "no-op":
-            self.merge_repo.update_merge_status(merge.id, MergeStatus.MERGED)
-        elif merge_result["status"] == "fast-forward":
-            # Update target branch HEAD to source HEAD
-            self.branch_repo.update_branch_head_commit(target_branch_id, source.head_commit_id)
-            self.merge_repo.update_merge_status(merge.id, MergeStatus.MERGED)
-        elif merge_result["status"] == "normal-merge":
-            # Create merge commit
-            merge_commit = self._create_merge_commit(source, target)
-            # Update target branch HEAD to merge commit
-            self.branch_repo.update_branch_head_commit(target_branch_id, merge_commit.id)
-            # Update merge record with merge commit
-            self.merge_repo.update_merge_status(merge.id, MergeStatus.MERGED, merge_commit.id)
-        elif merge_result["status"] == "conflict":
-            self.merge_repo.update_merge_status(merge.id, MergeStatus.CONFLICT)
+        # Get target branch to access project
+        target_branch = self.branch_repo.get_branch_by_id(merge.target_branch_id)
+        if not target_branch:
+            raise NotFoundError(f"Target branch not found")
+        
+        # AUTHORIZATION: Verify user owns project
+        project = self.project_repo.get_project_by_id(target_branch.project_id)
+        if not project or project.owner_id != user_id:
+            raise ForbiddenError("You do not own the project containing this merge")
+        
+        # For now, just update status to indicate approval
+        # In a real system, this would track approvals separately
+        self.merge_repo.update_merge_status(merge.id, MergeStatus.MERGED)
         
         return self.merge_repo.get_merge_by_id(merge.id)
 
@@ -367,17 +368,3 @@ class MergeService:
         if not merge:
             raise ValueError(f"Merge {merge_id} not found")
         return merge
-
-    def get_merge_history(self, project_id: int, skip: int = 0, limit: int = 100) -> list[Merge]:
-        """
-        Get all merges in a project
-        """
-        # Verify project exists
-        project = self.project_repo.get_project_by_id(project_id)
-        if not project:
-            raise ValueError(f"Project {project_id} not found")
-        
-        # Get all merges (simplified for MVP)
-        merges = self.merge_repo.get_pending_merges(skip=skip, limit=limit)
-        
-        return merges

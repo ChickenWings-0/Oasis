@@ -35,20 +35,7 @@ async def merge_branches(
 ):
     """
     Merge source branch into target branch.
-    
-    Request body:
-    {
-      "source_branch_id": 5,
-      "target_branch_id": 3
-    }
-    
-    - Verifies both branches exist and belong to same project
-    - Verifies current user owns the project
-    - Determines merge type (no-op, fast-forward, normal, conflict)
-    - Creates merge commit automatically
-    - Updates target branch HEAD
-    - Records merge in history
-    
+
     Returns: MergeResponse with merge details
     """
     try:
@@ -56,8 +43,8 @@ async def merge_branches(
         
         merge = service.merge_branches(
             user_id=current_user.user_id,
-            source_id=request_body["source_branch_id"],
-            target_id=request_body["target_branch_id"]
+            source_branch_id=request_body["source_branch_id"],
+            target_branch_id=request_body["target_branch_id"]
         )
         
         return merge
@@ -129,10 +116,6 @@ async def get_merge_history(
     """
     Get merge history for a project.
     
-    Query Parameters:
-    - skip: Number of merges to skip (pagination)
-    - limit: Max merges to return (pagination)
-    
     Returns: List of MergeResponse (newest first)
     """
     try:
@@ -148,4 +131,46 @@ async def get_merge_history(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch merge history: {str(e)}"
+        )
+
+
+@router.post(
+    "/{merge_id}/approve",
+    response_model=MergeResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Approve a merge request"
+)
+async def approve_merge(
+    merge_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Approve a merge request (marks as approved).
+    
+    Returns: Updated MergeResponse
+    """
+    try:
+        service = MergeService(db)
+        merge = service.approve_merge(merge_id, current_user.user_id)
+        return merge
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=e.message
+        )
+    except ForbiddenError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=e.message
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=e.message
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to approve merge: {str(e)}"
         )

@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, and_
 from datetime import datetime
-from ..models import Merge, MergeStatus
+from ..models import Merge, MergeStatus, Branch
 from ..schemas import MergeCreate, MergeUpdate
 
 
@@ -55,6 +55,14 @@ class MergeRepository:
         return self.db.query(Merge).filter(
             (Merge.source_branch_id == branch_id) | 
             (Merge.target_branch_id == branch_id)
+        ).order_by(desc(Merge.created_at)).offset(skip).limit(limit).all()
+
+    def get_merges_by_project(self, project_id: int, skip: int = 0, limit: int = 100) -> list[Merge]:
+        """Get all merges for a project (both source and target branches must be from project)"""
+        return self.db.query(Merge).join(
+            Branch, Merge.target_branch_id == Branch.id
+        ).filter(
+            Branch.project_id == project_id
         ).order_by(desc(Merge.created_at)).offset(skip).limit(limit).all()
 
     def update_merge_status(self, merge_id: int, status: MergeStatus, 

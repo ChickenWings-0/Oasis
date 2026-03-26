@@ -6,38 +6,17 @@ from ..exceptions import ForbiddenError, NotFoundError, ValidationError
 
 
 class BranchService:
-    """
-    Business logic layer for Branches
-    Handles branch creation, naming rules, and pointer management
-    
-    AUTHORIZATION RULES:
-    - Only project owner can create branches
-    - Only project owner can view project branches
-    """
 
     def __init__(self, db: Session):
         self.db = db
         self.branch_repo = BranchRepository(db)
         self.project_repo = ProjectRepository(db)
 
-    def create_branch(self, user_id: int, project_id: int, base_branch_id: int, 
-                     new_branch_name: str) -> Branch:
+    def create_branch(self, user_id: int, project_id: int, new_branch_name: str, 
+                     base_branch_id: int = None) -> Branch:
         """
         Create new branch from existing base branch
         
-        AUTHORIZATION: Only project owner can create branches
-        
-        Flow:
-        1. Verify project exists and user owns it
-        2. Verify base branch exists and belongs to project
-        3. Verify new branch name is unique in project
-        4. Copy base branch's head_commit_id to new branch
-        5. Create new branch with inherited HEAD
-        
-        Raises:
-        - NotFoundError: Project or branch doesn't exist
-        - ForbiddenError: User is not project owner
-        - ValidationError: Invalid branch name or duplicate
         """
         # Verify project exists and get ownership
         project = self.project_repo.get_project_by_id(project_id)
@@ -47,6 +26,18 @@ class BranchService:
         # AUTHORIZATION CHECK: Verify project ownership
         if project.owner_id != user_id:
             raise ForbiddenError(f"You do not own project {project_id}")
+        
+        # If base_branch_id not provided, auto-select main branch
+        if base_branch_id is None:
+            main_branch = self.branch_repo.get_branch_by_name(project_id, "main")
+            if main_branch:
+                base_branch_id = main_branch.id
+            else:
+                # If no main branch, use the first branch in the project
+                first_branch = self.branch_repo.list_branches(project_id, skip=0, limit=1)
+                if not first_branch:
+                    raise ValidationError(f"Project {project_id} has no branches. Cannot create branch from empty project.")
+                base_branch_id = first_branch[0].id
         
         # Verify base branch exists and belongs to project
         base_branch = self.branch_repo.get_branch_by_id(base_branch_id)

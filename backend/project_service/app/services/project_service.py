@@ -111,3 +111,41 @@ class ProjectService:
         project = self.get_project(user_id, project_id)
         
         return self.project_repo.delete_project(project_id)
+
+    def update_project(self, user_id: int, project_id: int, project_data) -> Project:
+        """
+        Update project with ownership verification
+        
+        AUTHORIZATION: Only owner can update their project
+        
+        Rules:
+        1. Project must exist
+        2. Current user must be the owner
+        3. Only provided fields are updated (partial update)
+        
+        Raises:
+        - NotFoundError: Project doesn't exist
+        - ForbiddenError: User is not the owner
+        """
+        # Verify ownership
+        project = self.get_project(user_id, project_id)
+        
+        # Update only provided fields
+        updates = {}
+        if project_data.name is not None:
+            if len(project_data.name.strip()) == 0:
+                raise ValidationError("Project name cannot be empty")
+            if len(project_data.name) > 255:
+                raise ValidationError("Project name must be <= 255 characters")
+            updates['name'] = project_data.name
+        
+        if project_data.description is not None:
+            if len(project_data.description) > 2000:
+                raise ValidationError("Project description must be <= 2000 characters")
+            updates['description'] = project_data.description
+        
+        # Apply updates if any
+        if updates:
+            return self.project_repo.update_project(project_id, **updates)
+        
+        return project

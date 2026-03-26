@@ -45,6 +45,20 @@ class ProjectRepository:
         
         return query.order_by(desc(Project.created_at)).offset(skip).limit(limit).all()
 
+    def update_project(self, project_id: int, **updates) -> Project | None:
+        """Update project fields and return updated project"""
+        project = self.get_project_by_id(project_id)
+        if not project:
+            return None
+        
+        for key, value in updates.items():
+            if value is not None and hasattr(project, key):
+                setattr(project, key, value)
+        
+        self.db.commit()
+        self.db.refresh(project)
+        return project
+
     def delete_project(self, project_id: int) -> bool:
         """Delete project by ID"""
         project = self.get_project_by_id(project_id)

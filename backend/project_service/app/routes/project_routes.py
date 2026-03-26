@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..dependencies.auth_dependency import get_current_user, CurrentUser
 from ..services import ProjectService
-from ..schemas import ProjectCreate, ProjectResponse
+from ..schemas import ProjectCreate, ProjectResponse, ProjectUpdate
 from ..exceptions import ForbiddenError, NotFoundError, ValidationError
 from typing import List
 
@@ -35,10 +35,6 @@ async def create_project(
 ):
     """
     Create a new project.
-    
-    - Validates project name
-    - Auto-creates 'main' branch
-    - Sets owner to current authenticated user
     
     Returns: ProjectResponse with created project
     """
@@ -76,11 +72,7 @@ async def get_user_projects(
 ):
     """
     Get all projects owned by the current user.
-    
-    Query Parameters:
-    - skip: Number of projects to skip (pagination)
-    - limit: Max projects to return (pagination)
-    
+  
     Returns: List of ProjectResponse
     """
     try:
@@ -107,10 +99,7 @@ async def get_project(
 ):
     """
     Get a single project by ID.
-    
-    - Verifies project exists
-    - Verifies current user is the owner
-    
+   
     Returns: ProjectResponse
     """
     try:
@@ -134,6 +123,49 @@ async def get_project(
         )
 
 
+@router.patch(
+    "/{project_id}",
+    response_model=ProjectResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update a project"
+)
+async def update_project(
+    project_id: int,
+    project_data: ProjectUpdate,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Update a project by ID.
+    
+    Returns: Updated ProjectResponse
+    """
+    try:
+        service = ProjectService(db)
+        project = service.update_project(current_user.user_id, project_id, project_data)
+        return project
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=e.message
+        )
+    except ForbiddenError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=e.message
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=e.message
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update project: {str(e)}"
+        )
+
+
 @router.delete(
     "/{project_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -146,11 +178,7 @@ async def delete_project(
 ):
     """
     Delete a project by ID.
-    
-    - Verifies project exists
-    - Verifies current user is the owner
-    - Cascades delete to all branches, commits, merges
-    
+
     Returns: 204 No Content on success
     """
     try:

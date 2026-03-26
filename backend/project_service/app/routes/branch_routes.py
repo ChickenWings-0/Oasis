@@ -29,26 +29,12 @@ router = APIRouter(
     summary="Create a new branch"
 )
 async def create_branch(
-    request_body: dict,  # {"name": str, "project_id": int, "base_branch_id": int}
+    request_body: dict,  # {"name": str, "project_id": int, "base_branch_id": int (optional)}
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Create a new branch from an existing branch.
-    
-    Request body:
-    {
-      "name": "feature/auth",
-      "project_id": 1,
-      "base_branch_id": 3
-    }
-    
-    - Verifies project ownership
-    - Verifies base branch exists
-    - Checks branch name uniqueness in project
-    - Inherits HEAD commit from base branch
-    
-    Returns: BranchResponse with created branch
     """
     try:
         service = BranchService(db)
@@ -56,8 +42,8 @@ async def create_branch(
         branch = service.create_branch(
             user_id=current_user.user_id,
             project_id=request_body["project_id"],
-            base_branch_id=request_body["base_branch_id"],
-            new_branch_name=request_body["name"]
+            new_branch_name=request_body["name"],
+            base_branch_id=request_body.get("base_branch_id")  # Optional parameter
         )
         
         return branch
@@ -128,11 +114,6 @@ async def list_branches(
 ):
     """
     Get all branches in a project.
-    
-    Query Parameters:
-    - skip: Number of branches to skip (pagination)
-    - limit: Max branches to return (pagination)
-    
     Returns: List of BranchResponse
     """
     try:
