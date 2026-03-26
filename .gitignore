@@ -1,5 +1,57 @@
 # ============================================================================
-# PYTHON & BYTECODE
+# CRITICAL: ENVIRONMENT & SECRETS - NEVER COMMIT THESE
+# ============================================================================
+.env
+.env.*
+!.env.example
+!.env.sample
+*.pem
+*.key
+*.crt
+.secrets/
+secrets.yaml
+config.local.py
+
+# ============================================================================
+# IDE & EDITOR FILES
+# ============================================================================
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.emacs*
+.atom/
+.project
+.pydevproject
+.settings/
+*.iml
+*.iws
+*.ipr
+*.swp
+*.swo
+*~
+.#*
+
+# ============================================================================
+# OPERATING SYSTEMS
+# ============================================================================
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.directory
+$RECYCLE.BIN/
+.TemporaryItems
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# ============================================================================
+# PYTHON & VIRTUAL ENVIRONMENTS
 # ============================================================================
 __pycache__/
 *.py[cod]
@@ -24,59 +76,10 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
-
-# ============================================================================
-# VIRTUAL ENVIRONMENTS
-# ============================================================================
 .venv/
 venv/
 ENV/
 env/
-
-# ============================================================================
-# ENVIRONMENT & SECRETS
-# ============================================================================
-.env
-.env.*
-!.env.example
-!.env.sample
-*.pem
-*.key
-config.local.py
-local_config.py
-
-# ============================================================================
-# DATABASE
-# ============================================================================
-*.db
-*.sqlite
-*.sqlite3
-*.sqlite-wal
-*.sqlite-shm
-auth_db.db
-project.db
-project_service.db
-user_service.db
-
-# ============================================================================
-# IDE & EDITORS
-# ============================================================================
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-.project
-.pydevproject
-.settings/
-*.sublime-project
-*.sublime-workspace
-.emacs*
-.atom/
-*.iml
-*.iws
-*.ipr
 
 # ============================================================================
 # TESTING & COVERAGE
@@ -89,9 +92,9 @@ htmlcov/
 .nox/
 .hypothesis/
 *.cover
-*.log
 nosetests.xml
 coverage.xml
+.cache
 
 # ============================================================================
 # TYPE CHECKING
@@ -102,60 +105,57 @@ dmypy.json
 .pylint.d/
 
 # ============================================================================
-# JUPYTER & NOTEBOOKS
+# DATABASE FILES
 # ============================================================================
-.ipynb_checkpoints
-*.ipynb
-.jupyter
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+auth_db.db
+project.db
+project_service.db
 
 # ============================================================================
-# OPERATING SYSTEM
+# LOGS & TEMPORARY FILES
 # ============================================================================
-Thumbs.db
-.DS_Store
-.AppleDouble
-.LSOverride
-.Spotlight-V100
-.Trashes
-desktop.ini
-ehthumbs.db
-.directory
-
-# ============================================================================
-# DEVELOPMENT & DEBUGGING
-# ============================================================================
-.vscode-test
-.debug
-.python-version
-.envrc
-.direnv
-
-# ============================================================================
-# DEPENDENCY MANAGEMENT
-# ============================================================================
-poetry.lock
-Pipfile.lock
-.pip-cache/
-
-# ============================================================================
-# CELERY & TASK QUEUES
-# ============================================================================
-celerybeat-schedule
-celerybeat.pid
-
-# ============================================================================
-# APPLICATION
-# ============================================================================
+*.log
 logs/
 tmp/
 temp/
-test-frontend.html
-.streamlit/
-.secrets/
 
 # ============================================================================
-# DOCKER
+# NODE & PACKAGE MANAGERS
+# ============================================================================
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+poetry.lock
+Pipfile.lock
+
+# ============================================================================
+# DOCUMENTATION BUILD
+# ============================================================================
+site/
+docs/_build/
+
+# ============================================================================
+# DEVELOPMENT TOOLS
+# ============================================================================
+.python-version
+.envrc
+.direnv
+.ipynb_checkpoints
+*.ipynb
+
+# ============================================================================
+# DOCKER & CONTAINERS
 # ============================================================================
 docker-compose.override.yml
 
-
+# ============================================================================
+# PROJECT-SPECIFIC
+# ============================================================================
+test-frontend.html
+.streamlit/
