@@ -1,8 +1,32 @@
+import sys
 from pathlib import Path
 import subprocess
 from datetime import datetime
 
 from utils import get_output_dir
+
+
+# Add oasis_music_module to path
+current = Path(__file__).resolve()
+music_root = None
+
+for parent in current.parents:
+    candidate = parent / "oasis_music_module"
+    if candidate.exists():
+        music_root = candidate
+        break
+
+if music_root is None:
+    raise ImportError("oasis_music_module not found")
+
+# DEBUG (leave for now)
+print("Music root:", music_root)
+print("Contents:", list(music_root.iterdir()))
+
+if str(music_root) not in sys.path:
+    sys.path.insert(0, str(music_root))
+
+from app.generate import generate_music_clip
 
 
 def get_music_style(prompt: str) -> str:
@@ -21,35 +45,38 @@ def get_music_style(prompt: str) -> str:
         return "ambient"
 
 
-def generate_music(prompt: str, style: str) -> str:
+def build_music_prompt(prompt: str, style: str) -> str:
+    style_map = {
+        "synthwave": "retro electronic synthwave, atmospheric, cyberpunk vibe",
+        "ambient": "soft ambient soundscape, calm, atmospheric",
+        "orchestral": "cinematic orchestral music, strings, epic",
+        "jpop": "upbeat japanese pop music, anime style",
+        "dark_ambient": "dark ambient, horror atmosphere, deep textures",
+    }
+
+    style_desc = style_map.get(style, "ambient background music")
+
+    return f"{style_desc}, inspired by: {prompt}"
+
+
+def generate_music(prompt: str) -> str:
     base_dir = get_output_dir()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     audio_dir = base_dir / "audio"
     audio_dir.mkdir(parents=True, exist_ok=True)
 
-    output_path = audio_dir / f"music_{style}_{timestamp}.wav"
-
-    # TEMP FIX: generate silent audio if real module not connected
     try:
-        subprocess.run(
-            [
-                "ffmpeg",
-                "-y",
-                "-f",
-                "lavfi",
-                "-i",
-                "anullsrc=r=44100:cl=stereo",
-                "-t",
-                "10",
-                str(output_path),
-            ],
-            check=True,
+        output_path = generate_music_clip(
+            prompt=prompt,
+            duration_seconds=10,
         )
-    except Exception as e:
-        print(f"Audio generation failed: {e}")
 
-    return str(output_path)
+        return str(output_path)
+
+    except Exception as e:
+        print(f"Music module failed: {e}")
+        return None
 
 
 def combine_video_music(video_path: str, audio_path: str, output_path: str) -> str:

@@ -2,7 +2,7 @@ from datetime import datetime
 from pathlib import Path
 
 from generator import generate_frames
-from music_integration import combine_video_music, generate_music, get_music_style
+from music_integration import combine_video_music, generate_music
 from renderer import create_video_from_frames
 from utils import get_output_dir, save_frames
 
@@ -32,14 +32,23 @@ def main() -> None:
         num_frames = 8
 
     resolution_input = input(
-        "Select resolution: 1) 256x256 (fast), 2) 384x384 (balanced), 3) 512x512 (high quality) [default 1]: "
+        "Select resolution: 1) 384x384 (balanced), 2) 512x512 (high quality), 3) 768x768 (ultra quality), 4) 1080p (upscaled) [default 1]: "
     ).strip()
-    if resolution_input == "2":
+    if resolution_input == "1":
         width, height = 384, 384
-    elif resolution_input == "3":
+        upscale_factor = 1
+    elif resolution_input == "2":
         width, height = 512, 512
+        upscale_factor = 1
+    elif resolution_input == "3":
+        width, height = 768, 768
+        upscale_factor = 1
+    elif resolution_input == "4":
+        width, height = 768, 768
+        upscale_factor = 2
     else:
-        width, height = 256, 256
+        width, height = 384, 384
+        upscale_factor = 1
 
     try:
         motion_level = "medium"
@@ -52,6 +61,10 @@ def main() -> None:
             width=width,
             height=height,
         )
+        if upscale_factor > 1:
+            from upscaler import upscale_frames
+            print("Upscaling frames for high resolution output...")
+            frames = upscale_frames(frames)
         save_frames(frames, str(frame_dir))
 
         video_dir = base_dir / "videos"
@@ -65,19 +78,20 @@ def main() -> None:
         choice = input("Generate music? (y/n): ").strip().lower()
 
         if choice == "y":
-            suggested_style = get_music_style(prompt)
-            style = input(f"Select music style (default: {suggested_style}): ").strip()
+            use_custom = input("Use custom audio prompt? (y/n): ").strip().lower()
 
-            if not style:
-                style = suggested_style
+            if use_custom == "y":
+                audio_prompt = input("Enter audio prompt: ").strip()
+            else:
+                audio_prompt = prompt
 
-            audio_path = generate_music(prompt, style)
+            audio_path = generate_music(audio_prompt)
 
             final_output = str(video_dir / f"final_{timestamp}.mp4")
 
-            final_video_path = combine_video_music(video_path, audio_path, final_output)
+            combine_video_music(video_path, audio_path, final_output)
 
-            print(f"Final video with music saved at: {final_video_path}")
+            print(f"Final video with music saved at: {final_output}")
     except Exception as exc:
         print(f"Error: {exc}")
 

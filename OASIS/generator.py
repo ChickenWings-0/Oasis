@@ -52,8 +52,11 @@ def generate_frames(
     text2img_pipe.enable_attention_slicing()
     img2img_pipe.enable_attention_slicing()
 
-    text2img_pipe.enable_vae_slicing()
-    img2img_pipe.enable_vae_slicing()
+    if hasattr(text2img_pipe, "enable_vae_slicing"):
+        text2img_pipe.enable_vae_slicing()
+
+    if hasattr(img2img_pipe, "enable_vae_slicing"):
+        img2img_pipe.enable_vae_slicing()
 
     try:
         text2img_pipe.enable_xformers_memory_efficient_attention()
@@ -112,9 +115,12 @@ def generate_frames(
                 guidance_scale=guidance_scale,
                 num_inference_steps=num_inference_steps,
             ).images[0]
+            image = image.resize((width, height), Image.LANCZOS)
         else:
             # Blend prior frame with the first frame to prevent cumulative artifact drift.
             source_image = Image.blend(frames[-1], frames[0], 0.3)
+            # Ensure img2img source uses the configured resolution.
+            source_image = source_image.resize((width, height), Image.LANCZOS)
             image = img2img_pipe(
                 prompt=enhanced_prompt,
                 negative_prompt=negative_prompt,
@@ -125,6 +131,7 @@ def generate_frames(
                 num_inference_steps=num_inference_steps,
             ).images[0]
 
+        image = image.resize((width, height), Image.LANCZOS)
         image = apply_camera_motion(image, i, num_frames, motion_type)
         frames.append(image)
 
