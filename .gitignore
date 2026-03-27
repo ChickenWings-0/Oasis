@@ -1,13 +1,41 @@
+# Model weights
+*.safetensors
+*.bin
+*.pt
+*.ckpt
+
+# Model directories
+models/
+**/models/
+
 # Python cache
 __pycache__/
 *.pyc
+*.pyd
+*.pyo
 
-# Virtual environment
-.venv/
+# HuggingFace / Torch cache
+.cache/
+.huggingface/
 
-# Generated outputs
+# Outputs
 outputs/
+*.mp4
+*.png
+*.jpg
+*.jpeg
+
+# Temporary files
+tmp/
+temp/
 
 # OS files
 .DS_Store
 Thumbs.db
+
+# Virtual environments
+.venv/
+venv/
+
+# Logs
+*.log
