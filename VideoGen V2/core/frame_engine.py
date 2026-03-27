@@ -2,6 +2,7 @@ from core.models import PromptPlan
 from core.camera_motion import get_camera_transform
 from core.controlnet_utils import get_depth_image
 from PIL import Image
+import cv2
 import numpy as np
 import torch
 import math
@@ -38,6 +39,92 @@ def apply_transform(image: Image.Image, transform) -> Image.Image:
     return scaled.crop((left, top, left + width, top + height))
 
 
+def match_color(prev, curr):
+    matched = np.empty_like(curr)
+
+    for c in range(3):
+        src = curr[:, :, c].ravel()
+        ref = prev[:, :, c].ravel()
+
+        src_values, src_idx, src_counts = np.unique(src, return_inverse=True, return_counts=True)
+        ref_values, ref_counts = np.unique(ref, return_counts=True)
+
+        src_quantiles = np.cumsum(src_counts).astype(np.float64)
+        src_quantiles /= src_quantiles[-1]
+        ref_quantiles = np.cumsum(ref_counts).astype(np.float64)
+        ref_quantiles /= ref_quantiles[-1]
+
+        interp_ref_values = np.interp(src_quantiles, ref_quantiles, ref_values)
+        matched[:, :, c] = interp_ref_values[src_idx].reshape(curr[:, :, c].shape).astype(np.uint8)
+
+    prev_mean, prev_std = prev.mean(axis=(0, 1)), prev.std(axis=(0, 1))
+    matched_mean, matched_std = matched.mean(axis=(0, 1)), matched.std(axis=(0, 1))
+    normalized = (matched.astype(np.float32) - matched_mean) * (prev_std / (matched_std + 1e-6)) + prev_mean
+    return np.clip(normalized, 0, 255).astype(np.uint8)
+
+
+def warp_frame_with_flow(prev_frame: Image.Image, target_frame: Image.Image) -> Image.Image:
+    prev_np = np.array(prev_frame.convert("RGB"))
+    target_np = np.array(target_frame.convert("RGB"))
+
+    prev_gray = cv2.cvtColor(prev_np, cv2.COLOR_RGB2GRAY)
+    target_gray = cv2.cvtColor(target_np, cv2.COLOR_RGB2GRAY)
+
+    flow = cv2.calcOpticalFlowFarneback(
+        prev_gray,
+        target_gray,
+        None,
+        0.5,
+        3,
+        21,
+        3,
+        5,
+        1.2,
+        0
+    )
+
+    h, w = prev_gray.shape
+    grid_x, grid_y = np.meshgrid(np.arange(w), np.arange(h))
+    map_x = (grid_x + flow[:, :, 0]).astype(np.float32)
+    map_y = (grid_y + flow[:, :, 1]).astype(np.float32)
+
+    warped = cv2.remap(
+        prev_np,
+        map_x,
+        map_y,
+        interpolation=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_REFLECT
+    )
+
+    return Image.fromarray(warped)
+
+
+def extract_identity_embedding(image: Image.Image) -> np.ndarray:
+    image_np = np.array(image.convert("RGB"), dtype=np.float32)
+    small = cv2.resize(image_np, (32, 32), interpolation=cv2.INTER_AREA)
+    embedding = small.reshape(-1)
+    norm = np.linalg.norm(embedding) + 1e-6
+    return embedding / norm
+
+
+def enforce_identity_consistency(
+    image: Image.Image,
+    identity_reference: Image.Image,
+    identity_embedding: np.ndarray,
+    min_similarity: float = 0.90
+) -> Image.Image:
+    current_embedding = extract_identity_embedding(image)
+    similarity = float(np.dot(identity_embedding, current_embedding))
+
+    if similarity >= min_similarity:
+        return image
+
+    current_np = np.array(image).astype(np.float32)
+    reference_np = np.array(identity_reference).astype(np.float32)
+    corrected = np.clip(0.85 * current_np + 0.15 * reference_np, 0, 255).astype(np.uint8)
+    return Image.fromarray(corrected)
+
+
 def generate_keyframes(prompt_plan, text2img_pipe, num_frames, device):
     CHUNK_SIZE = 28
     keyframes = []
@@ -71,11 +158,16 @@ def generate_frames_chunked(prompt_plan, text2img_pipe, controlnet_pipe, device)
         return []
 
     frames = [keyframes[0]]
+    identity_reference = keyframes[0]
+    identity_embedding = extract_identity_embedding(identity_reference)
     base_seed = prompt_plan.seed if prompt_plan.seed is not None else 42
+    seed = base_seed
+    generator = torch.Generator(device=device).manual_seed(seed)
 
     for k in range(len(keyframes) - 1):
         start_frame = keyframes[k]
         end_frame = keyframes[k + 1]
+        prev_frame = start_frame
 
         for i in range(1, CHUNK_SIZE):
             global_i = k * CHUNK_SIZE + i
@@ -88,11 +180,11 @@ def generate_frames_chunked(prompt_plan, text2img_pipe, controlnet_pipe, device)
                 prompt_plan.num_frames
             )
 
-            seed = base_seed + (global_i * 3)
-            generator = torch.Generator(device=device).manual_seed(seed)
-
-            t = global_i / (prompt_plan.num_frames - 1) if prompt_plan.num_frames > 1 else 0
-            strength = 0.35 + 0.1 * np.sin(t * np.pi)
+            if i < 3:
+                strength = 0.55
+            else:
+                strength = 0.35
+            strength = max(0.25, min(0.6, strength))
 
             alpha = i / CHUNK_SIZE
 
@@ -111,12 +203,21 @@ def generate_frames_chunked(prompt_plan, text2img_pipe, controlnet_pipe, device)
             noisy = np.clip(np.array(transformed).astype(np.float32) + noise, 0, 255).astype(np.uint8)
             transformed = Image.fromarray(noisy)
 
+            if i == 1:
+                temporal_reference = identity_reference
+            else:
+                temporal_reference = Image.blend(identity_reference, prev_frame, 0.2)
+
+            warped_prev = apply_transform(prev_frame, transform)
+            warped_prev = warp_frame_with_flow(warped_prev, transformed)
+
             if controlnet_pipe is not None:
                 image = controlnet_pipe(
                     prompt=prompt_plan.enhanced_prompt,
                     negative_prompt=prompt_plan.negative_prompt,
-                    image=transformed,
+                    image=warped_prev,
                     control_image=depth_image,
+                    ip_adapter_image=temporal_reference,
                     controlnet_conditioning_scale=prompt_plan.controlnet_conditioning_scale,
                     strength=strength,
                     guidance_scale=prompt_plan.guidance_scale,
@@ -126,11 +227,23 @@ def generate_frames_chunked(prompt_plan, text2img_pipe, controlnet_pipe, device)
             else:
                 image = transformed
 
-            image = np.array(image)
-            image = np.clip(image, 0, 255).astype(np.uint8)
-            image = Image.fromarray(image)
+            curr_np = np.array(image)
+
+            if i > 1:
+                prev_np = np.array(prev_frame)
+                stabilized = match_color(prev_np, curr_np)
+                image = Image.fromarray(stabilized)
+            else:
+                curr_np = np.clip(curr_np, 0, 255).astype(np.uint8)
+                image = Image.fromarray(curr_np)
+
+            image = enforce_identity_consistency(image, identity_reference, identity_embedding)
+
+            if i > 1:
+                image = Image.blend(prev_frame, image, 0.85)
 
             frames.append(image)
+            prev_frame = image
 
     if len(frames) < prompt_plan.num_frames:
         frames.append(keyframes[-1])
@@ -148,8 +261,8 @@ def generate_frames(
     frames = []
 
     base_seed = prompt_plan.seed if prompt_plan.seed is not None else 42
-
-    generator = torch.Generator(device=device).manual_seed(base_seed)
+    seed = base_seed
+    generator = torch.Generator(device=device).manual_seed(seed)
 
     # first frame (text2img)
     first = text2img_pipe(
@@ -164,8 +277,18 @@ def generate_frames(
 
     frames.append(first)
 
+    if controlnet_pipe is not None:
+        controlnet_pipe.load_ip_adapter(
+            "h94/IP-Adapter",
+            subfolder="models",
+            weight_name="ip-adapter_sd15.bin"
+        )
+        controlnet_pipe.set_ip_adapter_scale(0.5)
+
+    identity_reference = first
+    identity_embedding = extract_identity_embedding(identity_reference)
+    prev_frame = first
     target = first
-    reference_mean = None
 
     # generate sequence
     for i in range(1, prompt_plan.num_frames):
@@ -179,21 +302,27 @@ def generate_frames(
 
         transformed = apply_transform(target, transform)
 
-        seed = base_seed + (i * 3)
-        generator = torch.Generator(device=device).manual_seed(seed)
-
         t = i / (prompt_plan.num_frames - 1) if prompt_plan.num_frames > 1 else 0
         strength = 0.35 + 0.1 * np.sin(t * np.pi)
+        strength = max(0.25, min(0.6, strength))
 
-        canny = get_depth_image(target)
+        canny = get_depth_image(transformed)
+
+        if i == 1:
+            temporal_reference = identity_reference
+        else:
+            temporal_reference = Image.blend(identity_reference, prev_frame, 0.2)
+
+        warped_prev = warp_frame_with_flow(prev_frame, transformed)
 
         if controlnet_pipe is not None:
             # always use controlnet
             image = controlnet_pipe(
                 prompt=prompt_plan.enhanced_prompt,
                 negative_prompt=prompt_plan.negative_prompt,
-                image=target,
+                image=warped_prev,
                 control_image=canny,
+                ip_adapter_image=temporal_reference,
                 controlnet_conditioning_scale=prompt_plan.controlnet_conditioning_scale,
                 strength=strength,
                 guidance_scale=prompt_plan.guidance_scale,
@@ -213,19 +342,22 @@ def generate_frames(
         else:
             image = transformed
 
-        curr = np.array(image).astype(np.float32)
+        curr_np = np.array(image)
 
-        if reference_mean is None:
-            reference_mean = np.mean(curr, axis=(0, 1))
+        if i > 1:
+            prev_np = np.array(prev_frame)
+            stabilized = match_color(prev_np, curr_np)
+            image = Image.fromarray(stabilized)
+        else:
+            curr_np = np.clip(curr_np, 0, 255).astype(np.uint8)
+            image = Image.fromarray(curr_np)
 
-        curr_mean = np.mean(curr, axis=(0, 1))
+        image = enforce_identity_consistency(image, identity_reference, identity_embedding)
 
-        scale = reference_mean / (curr_mean + 1e-6)
+        if i > 1:
+            image = Image.blend(prev_frame, image, 0.85)
 
-        curr = curr * scale
-        curr = np.clip(curr, 0, 255)
-
-        image = Image.fromarray(curr.astype(np.uint8))
+        prev_frame = image
         target = image
 
         frames.append(image)
