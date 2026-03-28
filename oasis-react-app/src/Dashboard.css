@@ -1,0 +1,179 @@
+.dashboard-container {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  padding: 2rem 3rem;
+  animation: fadeIn 0.8s ease-out forwards;
+}
+
+.dash-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.dash-logo-container {
+  display: flex;
+  align-items: center;
+}
+
+.dash-logo {
+  height: 60px;
+  filter: invert(1) drop-shadow(0 0 10px rgba(255, 255, 255, 0.2));
+  transform: rotate(-12deg) translateY(-4px); /* Tilted further to align with topography lines */
+}
+
+.dash-actions {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.coffee-beans-menu {
+  cursor: pointer;
+  transition: transform 0.2s ease, filter 0.2s ease;
+  filter: drop-shadow(0 4px 10px rgba(0,0,0,0.6));
+}
+.coffee-beans-menu:hover {
+  transform: scale(1.08);
+  filter: drop-shadow(0 6px 15px rgba(0,0,0,1));
+}
+
+.dash-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 1200px;
+  margin: 1.5rem auto 1rem auto;
+  padding: 3rem 2rem;
+  
+  /* Glassmorphism styling */
+  background: rgba(30, 2, 8, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08); /* Hint of light reflecting off edges */
+  border-radius: 32px;
+  box-shadow: 0 40px 80px rgba(0, 0, 0, 0.7), inset 0 2px 5px rgba(255, 255, 255, 0.04);
+}
+
+.welcome-text {
+  font-family: var(--font-cursive);
+  font-size: 4rem;
+  color: #fff;
+  letter-spacing: 3px;
+  text-shadow: 0 4px 15px rgba(0, 0, 0, 1);
+  margin: 0 0 3rem 0;
+}
+
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2rem;
+  max-width: 1000px;
+  width: 100%;
+}
+
+.grid-card {
+  aspect-ratio: 1;
+  background-color: #59121e;
+  border-radius: 16px;
+  box-shadow: inset 0 0 20px rgba(0,0,0,0.4), 0 8px 15px rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.grid-card:hover {
+  transform: translateY(-5px);
+  box-shadow: inset 0 0 20px rgba(0,0,0,0.3), 0 12px 20px rgba(0,0,0,0.6);
+}
+
+.add-card {
+  color: white;
+}
+
+.album-card {
+  padding: 12px;
+}
+
+.album-placeholder-wrapper {
+  width: 100%;
+  height: 100%;
+  background-color: #0b0204;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+
+.album-art-placeholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #aa3a45, #110d19);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.8;
+}
+
+.album-title {
+  font-family: var(--font-cursive);
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: white;
+  letter-spacing: 2px;
+}
+
+.album-artist {
+  font-family: var(--font-sans);
+  font-size: 0.6rem;
+  color: #fff;
+  opacity: 0.8;
+  letter-spacing: 1px;
+}
+
+.dash-footer {
+  position: absolute;
+  bottom: 2rem;
+  left: 3rem;
+}
+
+.user-profile-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: opacity 0.2s;
+}
+.user-profile-btn:hover {
+  opacity: 0.8;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (max-width: 900px) {
+  .cards-grid { grid-template-columns: repeat(3, 1fr); }
+  .welcome-text { font-size: 3rem; }
+}
+
+@media (max-width: 600px) {
+  .cards-grid { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+  .welcome-text { font-size: 2.2rem; margin-bottom: 1.5rem; }
+  .dash-header { padding: 1rem; }
+  .dash-logo { height: 40px; }
+  .coffee-beans-menu { transform: scale(0.8); }
+  .dash-footer { bottom: 1rem; left: 1rem; }
+}
