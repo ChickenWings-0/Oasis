@@ -1,12 +1,57 @@
 # Python cache
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+*$py.class
+
+# Python packaging/build
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
 
 # Virtual environment
 .venv/
+venv/
+env/
+.python-version
 
 # Generated outputs
 outputs/
+*.mid
+*.midi
+*.tmp.wav
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.nox/
+.tox/
+
+# Coverage
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs and local runtime files
+*.log
+*.pid
+*.seed
+*.out
+*.err
+
+# Environment and local secrets
+.env
+.env.*
+!.env.example
 
 # OS files
 .DS_Store

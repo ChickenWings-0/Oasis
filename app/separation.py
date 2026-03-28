@@ -9,9 +9,65 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict
 
+import torch
+
 from app.config import OUTPUT_DIR
 
 REQUIRED_STEMS = ("drums", "bass", "vocals", "other")
+
+
+def _ffmpeg_bin_candidates() -> list[Path]:
+    candidates: list[Path] = []
+
+    local_app_data = Path(os.environ.get("LOCALAPPDATA", ""))
+    if local_app_data:
+        # Winget symlink aliases path (ffmpeg.exe, ffprobe.exe, ffplay.exe)
+        candidates.append(local_app_data / "Microsoft" / "WinGet" / "Links")
+
+        # Gyan shared build installed by winget.
+        candidates.extend(
+            local_app_data.glob(
+                "Microsoft/WinGet/Packages/Gyan.FFmpeg.Shared*/ffmpeg-*/bin"
+            )
+        )
+
+        # Gyan static build (still useful for ffmpeg.exe even if torchcodec prefers shared DLLs).
+        candidates.extend(
+            local_app_data.glob(
+                "Microsoft/WinGet/Packages/Gyan.FFmpeg*/ffmpeg-*/bin"
+            )
+        )
+
+    program_files = Path(os.environ.get("ProgramFiles", ""))
+    if program_files:
+        candidates.append(program_files / "ffmpeg" / "bin")
+
+    # De-duplicate while preserving order.
+    seen: set[str] = set()
+    unique: list[Path] = []
+    for path in candidates:
+        key = str(path).lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(path)
+
+    return unique
+
+
+def _augment_env_with_ffmpeg(env: dict[str, str]) -> dict[str, str]:
+    merged = dict(env)
+    existing_path = merged.get("PATH", "")
+    prefix: list[str] = []
+
+    for folder in _ffmpeg_bin_candidates():
+        if (folder / "ffmpeg.exe").exists():
+            prefix.append(str(folder))
+
+    if prefix:
+        merged["PATH"] = os.pathsep.join(prefix + [existing_path]) if existing_path else os.pathsep.join(prefix)
+
+    return merged
 
 
 def _find_demucs_stem_dir(output_root: Path) -> Path:
@@ -44,7 +100,9 @@ def separate_audio(path: str | Path) -> Dict[str, str]:
     run_output_root = OUTPUT_DIR / f"separated_{stamp}"
     run_output_root.mkdir(parents=True, exist_ok=True)
 
-    command = [
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    base_command = [
         sys.executable,
         "-m",
         "demucs",
@@ -52,18 +110,26 @@ def separate_audio(path: str | Path) -> Dict[str, str]:
         "-o",
         str(run_output_root),
         "--float32",
-        "-d",
-        "cuda",
     ]
 
-    try:
-        env = os.environ.copy()
-        env["TORCHAUDIO_USE_BACKEND"] = "soundfile"
-        subprocess.run(command, check=True, env=env)
-    except Exception as exc:
-        raise RuntimeError(
-            "Demucs separation failed. Install dependencies with: pip install demucs"
-        ) from exc
+    env = _augment_env_with_ffmpeg(os.environ.copy())
+    env["TORCHAUDIO_USE_BACKEND"] = "soundfile"
+
+    # Prefer CUDA when available, but fall back to CPU if CUDA execution fails.
+    tried = []
+    for target_device in ([device, "cpu"] if device == "cuda" else ["cpu"]):
+        command = [*base_command, "-d", target_device]
+        tried.append(target_device)
+        try:
+            subprocess.run(command, check=True, env=env)
+            break
+        except Exception as exc:
+            if target_device == "cpu":
+                raise RuntimeError(
+                    "Demucs separation failed. Ensure Demucs is installed with `pip install demucs` "
+                    f"and ffmpeg is available in PATH. Devices tried: {', '.join(tried)}. "
+                    f"Original error: {exc}"
+                ) from exc
 
     stem_source_dir = _find_demucs_stem_dir(run_output_root)
     final_dir = OUTPUT_DIR / f"stems_{stamp}"

@@ -1,31 +1,21 @@
 from __future__ import annotations
 
-from datetime import datetime
 from pathlib import Path
 
 import gradio as gr
 
 from app.config import OUTPUT_DIR
 from app.analysis import detect_bpm, detect_key
-from app.chords import detect_chords
+from app.chords import detect_chords_from_path
 from app.difficulty import detect_difficulty
 from app.energy import analyze_energy_profile
 from app.equalizer import EQ_PRESETS, run_equalizer
 from app.explain import explain_song
 from app.generate import MOOD_PROMPTS, generate_music_clip as generate_music
-from app.humming import (
-    extract_melody_events,
-    preprocess_humming_wav,
-    render_melody_guide_wav,
-    save_melody_events_json,
-    save_melody_events_midi,
-)
 from app.music_logic import (
     analyze_audio_character,
     build_music_dna,
     enrich_metadata_with_analysis,
-    generate_music_insight,
-    suggest_actions,
 )
 from app.separation import separate_audio
 from app.strum import analyze_strumming
@@ -51,64 +41,6 @@ def run_text_to_music(prompt: str, duration: int):
         import gradio as gr
         gr.Error(f"Generation failed: {str(e)}")
         return str(e), None, None
-
-
-def run_humming_analysis(humming_wav_path: str):
-    if not humming_wav_path:
-        message = "Please upload a WAV file before running analysis."
-        gr.Warning(message)
-        return message, None, None, None, None, None
-
-    try:
-        wav_path = Path(humming_wav_path)
-        if wav_path.suffix.lower() != ".wav":
-            message = "Invalid audio format. Please upload a .wav file."
-            gr.Warning(message)
-            return message, None, None, None, None, None
-
-        preprocess_info = preprocess_humming_wav(wav_path=wav_path)
-        melody_events = extract_melody_events(
-            waveform=preprocess_info["waveform"],
-            sample_rate=preprocess_info["target_sample_rate"],
-        )
-
-        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        json_path = OUTPUT_DIR / f"melody_events_{stamp}.json"
-        midi_path = OUTPUT_DIR / f"melody_events_{stamp}.mid"
-        guide_path = OUTPUT_DIR / f"melody_guide_{stamp}.wav"
-
-        save_melody_events_json(melody_events, json_path)
-        save_melody_events_midi(melody_events, midi_path)
-        render_melody_guide_wav(
-            events=melody_events,
-            output_path=guide_path,
-            sample_rate=preprocess_info["target_sample_rate"],
-        )
-
-        summary = (
-            "Humming analysis complete.\n"
-            f"Input path: {preprocess_info['input_path']}\n"
-            f"Input sample rate: {preprocess_info['input_sample_rate']}\n"
-            f"Target sample rate: {preprocess_info['target_sample_rate']}\n"
-            f"Resampled: {preprocess_info['resampled']}\n"
-            f"Channel status: {preprocess_info['channel_status']}\n"
-            f"Duration (s): {preprocess_info['duration_seconds']}\n"
-            f"Extracted melody events: {len(melody_events)}"
-        )
-
-        return (
-            "Processing complete.",
-            summary,
-            str(json_path.resolve()),
-            str(midi_path.resolve()),
-            str(guide_path.resolve()),
-            str(guide_path.resolve()),
-        )
-    except Exception:
-        message = "Humming analysis failed. Please upload a valid WAV clip (5-10 seconds) and try again."
-        gr.Error(message)
-        return message, None, None, None, None, None
 
 
 def run_instrument_separation(audio_path: str):
@@ -139,8 +71,8 @@ def run_instrument_separation(audio_path: str):
             vocals, vocals, vocals,
             other, other, other,
         )
-    except Exception:
-        message = "Instrument separation failed. Please try another file or check Demucs installation."
+    except Exception as e:
+        message = f"Instrument separation failed: {e}"
         gr.Error(message)
         return message, None, None, None, None, None, None, None, None, None, None, None, None
 
@@ -149,19 +81,19 @@ def run_audio_analysis(audio_path: str):
     if not audio_path:
         message = "Please upload an audio file before analysis."
         gr.Warning(message)
-        return message, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""
+        return message, "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""
 
     input_path = Path(audio_path)
     if input_path.suffix.lower() not in {".wav", ".mp3"}:
         message = "Invalid format. Please upload a WAV or MP3 file."
         gr.Warning(message)
-        return message, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""
+        return message, "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""
 
     try:
         bpm_result = detect_bpm(path=input_path)
         bpm_value = bpm_result.get("bpm", "")
         key_result = detect_key(path=input_path)
-        chords = detect_chords(path=input_path)
+        chords = detect_chords_from_path(path=input_path)
         strum_result = analyze_strumming(path=input_path)
 
         resolved_bpm = float(bpm_value) if bpm_value else 120.0
@@ -173,10 +105,6 @@ def run_audio_analysis(audio_path: str):
             f"• {k.replace('_',' ').title()}: {v}"
             for k, v in character.items()
         ])
-
-        insight_text = generate_music_insight(character)
-        suggestions = suggest_actions(character)
-        suggestions_text = "\n".join(suggestions) if suggestions else "No changes suggested."
 
         prompt = "default music prompt"
         analysis_data = enrich_metadata_with_analysis(
@@ -194,11 +122,17 @@ def run_audio_analysis(audio_path: str):
         guitar_tabs = tabs_data["guitar_tabs"]
         keyboard_notes = tabs_data["keyboard_notes"]
 
-        bpm_text = str(round(float(bpm_value), 2)) if bpm_value != "" else ""
+        bpm_text = str(round(float(bpm_value), 2)) if bpm_value not in ("", None) else ""
         key_text = str(key_result.get("key", ""))
         scale_text = str(key_result.get("scale", ""))
         chords_text = ", ".join(chords) if chords else "No chords detected"
-        clean_tabs = [tab if tab != "unknown" else "N/A" for tab in guitar_tabs]
+        clean_tabs = []
+        for entry in guitar_tabs:
+            if isinstance(entry, dict):
+                tab = str(entry.get("tab", "unknown"))
+            else:
+                tab = str(entry)
+            clean_tabs.append(tab if tab != "unknown" else "N/A")
         guitar_tabs_text = " | ".join(clean_tabs)
         keyboard_notes_text = ", ".join(["-".join(notes) for notes in keyboard_notes])
         metadata_text = (
@@ -250,15 +184,13 @@ def run_audio_analysis(audio_path: str):
             explanation_text,
             energy_text,
             character_text,
-            insight_text,
-            suggestions_text,
         )
     except Exception as e:
         import traceback
         traceback.print_exc()
         import gradio as gr
         gr.Error(f"Audio analysis failed: {str(e)}")
-        return str(e), "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""
+        return str(e), "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""
 
 
 def run_section_tempo(audio_path, table_data):
@@ -414,31 +346,6 @@ def build_ui() -> gr.Blocks:
                 )
             )
 
-        with gr.Tab("🎤 Hum Your Idea"):
-            gr.Markdown("Tip: Use short humming clips (5–10 seconds) for best results")
-            humming_input = gr.File(label="Upload Humming WAV", file_types=[".wav"], type="filepath")
-            analyze_btn = gr.Button("Analyze")
-            humming_status_output = gr.Textbox(label="Status", interactive=False)
-            summary_output = gr.Textbox(label="Analysis Summary", lines=10)
-            json_path_output = gr.File(label="Download JSON")
-            midi_path_output = gr.File(label="Download MIDI")
-            guide_audio_output = gr.Audio(label="Guide Audio", type="filepath")
-            guide_wav_download = gr.File(label="Download Guide WAV")
-
-            (
-                analyze_btn.click(
-                    fn=lambda: "Processing humming...",
-                    inputs=None,
-                    outputs=[humming_status_output],
-                    show_progress="hidden",
-                ).then(
-                    fn=run_humming_analysis,
-                    inputs=[humming_input],
-                    outputs=[humming_status_output, summary_output, json_path_output, midi_path_output, guide_audio_output, guide_wav_download],
-                    show_progress="full",
-                )
-            )
-
         with gr.Tab("🎚️ Split the Song"):
             separation_input = gr.File(label="Upload Audio (WAV/MP3)", file_types=[".wav", ".mp3"], type="filepath")
             separation_btn = gr.Button("Extract Instruments")
@@ -526,20 +433,6 @@ def build_ui() -> gr.Blocks:
                 lines=8
             )
 
-            gr.Markdown("### 🧠 Music Insight")
-
-            analysis_insight_output = gr.Textbox(
-                label="Music Insight",
-                interactive=False
-            )
-
-            gr.Markdown("### 💡 Suggestions")
-
-            analysis_suggestions_output = gr.Textbox(
-                label="Suggested Enhancements",
-                interactive=False
-            )
-
             gr.Markdown("### 🎼 Harmonic Analysis")
             chord_groups_output = gr.Textbox(label="Chord Groups", interactive=False)
             bassline_output = gr.Textbox(label="Bassline", interactive=False)
@@ -573,8 +466,6 @@ def build_ui() -> gr.Blocks:
                         analysis_explanation_output,
                         analysis_energy_output,
                         analysis_character_output,
-                        analysis_insight_output,
-                        analysis_suggestions_output,
                     ],
                     show_progress="full",
                 )

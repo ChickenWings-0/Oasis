@@ -9,6 +9,111 @@ import numpy as np
 TEMPOS = ["slow", "medium", "fast"]
 
 
+def analyze_metadata(chords: list, bpm: int | None, rhythm_style: str) -> dict:
+    """Create stable, explainable metadata from harmony, tempo, and rhythm style."""
+    if not chords:
+        return {
+            "genre": "unknown",
+            "mood": "unknown",
+            "difficulty": "unknown",
+            "tempo_type": "unknown",
+            "confidence": 0.0,
+        }
+
+    normalized_chords = [str(c).strip().upper() for c in chords if str(c).strip()]
+    if not normalized_chords:
+        return {
+            "genre": "unknown",
+            "mood": "unknown",
+            "difficulty": "unknown",
+            "tempo_type": "unknown",
+            "confidence": 0.0,
+        }
+
+    total_chords = len(normalized_chords)
+    unique_chords = len(set(normalized_chords))
+
+    lower_chords = [c.lower() for c in normalized_chords]
+    minor_count = sum(1 for c in lower_chords if "m" in c and "maj" not in c)
+    major_count = total_chords - minor_count
+    seventh_count = sum(1 for c in lower_chords if "7" in c)
+
+    minor_ratio = minor_count / total_chords
+    major_ratio = major_count / total_chords
+    chord_complexity = sum(1 for c in lower_chords if "7" in c or "dim" in c)
+
+    if bpm is None:
+        tempo_type = "unknown"
+    elif bpm < 80:
+        tempo_type = "slow"
+    elif bpm <= 120:
+        tempo_type = "medium"
+    else:
+        tempo_type = "fast"
+
+    style = str(rhythm_style).strip().lower()
+
+    if bpm is None and style == "steady":
+        genre = "ambient"
+    elif bpm is not None and bpm < 90 and minor_ratio > 0.5:
+        genre = "lofi"
+    elif bpm is not None and 90 <= bpm <= 130 and style in ["metronomic", "steady"]:
+        genre = "pop"
+    elif bpm is not None and bpm > 120 and style == "syncopated":
+        genre = "trap"
+    elif style == "free":
+        genre = "ambient"
+    else:
+        genre = "unknown"
+
+    if minor_ratio > 0.65:
+        mood = "sad"
+    elif major_ratio > 0.65:
+        mood = "happy"
+    elif bpm is not None and bpm > 120:
+        mood = "energetic"
+    elif style == "free":
+        mood = "calm"
+    else:
+        mood = "neutral"
+
+    score = 0
+    if bpm is not None and bpm > 120:
+        score += 1
+    if unique_chords > 4:
+        score += 1
+    if chord_complexity > 0:
+        score += 1
+    if style == "syncopated":
+        score += 1
+
+    if score <= 1:
+        difficulty = "easy"
+    elif score == 2:
+        difficulty = "medium"
+    else:
+        difficulty = "hard"
+
+    confidence = 0.5
+    if bpm is not None:
+        confidence += 0.2
+    if total_chords > 4:
+        confidence += 0.2
+    if style != "unknown":
+        confidence += 0.1
+    confidence = min(1.0, confidence)
+
+    _ = seventh_count
+
+    return {
+        "genre": genre,
+        "mood": mood,
+        "difficulty": difficulty,
+        "tempo_type": tempo_type,
+        "confidence": confidence,
+    }
+
+
 def analyze_audio_character(path: str) -> dict[str, str]:
     y, sr = librosa.load(path, sr=None, mono=True)
 
@@ -71,57 +176,6 @@ def build_music_dna(path: str, bpm: float, chords: list) -> dict:
         "bpm": bpm,
         "chords": chords,
     }
-
-
-def generate_music_insight(character: dict) -> str:
-    insights = []
-
-    if character.get("warmth") in {"high", "warm"}:
-        insights.append("Warm and intimate sound")
-
-    if character.get("energy") == "high":
-        insights.append("Energetic and engaging")
-
-    if character.get("groove") == "tight":
-        insights.append("Rhythmically tight")
-
-    if not insights:
-        insights.append("Balanced overall sonic character")
-
-    return " • ".join(insights)
-
-
-def enhance_prompt(base_prompt: str, character: dict) -> str:
-    additions = []
-
-    if character.get("warmth") in {"high", "warm"}:
-        additions.append("warm tones")
-
-    if character.get("brightness") in {"low", "dark"}:
-        additions.append("soft and mellow")
-
-    if character.get("energy") == "high":
-        additions.append("high energy")
-
-    if additions:
-        return base_prompt + ", " + ", ".join(additions)
-
-    return base_prompt
-
-
-def suggest_actions(character: dict) -> list:
-    suggestions = []
-
-    if character.get("energy") == "low":
-        suggestions.append("Try increasing energy")
-
-    if character.get("brightness") in {"high", "bright"}:
-        suggestions.append("Try a lo-fi transformation")
-
-    if character.get("aggressiveness") == "high":
-        suggestions.append("Try an ambient style")
-
-    return suggestions
 
 
 def build_music_metadata(path: str, prompt: str, bpm: float) -> dict:

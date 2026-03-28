@@ -109,16 +109,18 @@ def generate_music_clip(
     if duration_seconds <= 0:
         raise ValueError("duration_seconds must be greater than 0.")
 
+    effective_prompt = prompt.strip()
+
     processor, model, device = load_musicgen(model_id=model_id)
     max_new_tokens = max(1, int(duration_seconds * 50))
 
     try:
         if guide_audio_wav is None:
-            inputs = processor(text=[prompt], padding=True, return_tensors="pt")
+            inputs = processor(text=[effective_prompt], padding=True, return_tensors="pt")
         else:
             guide_audio = _load_conditioning_audio(guide_audio_wav, target_sample_rate=SAMPLE_RATE)
             inputs = processor(
-                text=[prompt],
+                text=[effective_prompt],
                 audio=guide_audio,
                 sampling_rate=SAMPLE_RATE,
                 padding=True,
@@ -147,7 +149,7 @@ def generate_music_clip(
 
     sample_rate = getattr(model.config.audio_encoder, "sampling_rate", SAMPLE_RATE)
     waveform = audio_values[0].detach().cpu().numpy().squeeze()
-    waveform = np.clip(waveform, -1.0, 1.0)
+    waveform = _prepare_waveform_for_export(waveform)
     waveform_int16 = (waveform * 32767).astype(np.int16)
 
     output_prefix = "musicgen_guided" if guide_audio_wav is not None else "musicgen"
@@ -162,6 +164,32 @@ def _to_mono_float(waveform: np.ndarray) -> np.ndarray:
     if waveform.dtype == np.int16:
         return waveform.astype(np.float32) / 32768.0
     return waveform.astype(np.float32)
+
+
+def _prepare_waveform_for_export(waveform: np.ndarray) -> np.ndarray:
+    """Normalize/boost generated audio so exports are not near-silent."""
+    audio = waveform.astype(np.float32)
+    if audio.size == 0:
+        raise ValueError("Generated audio is empty.")
+
+    audio = np.nan_to_num(audio, nan=0.0, posinf=0.0, neginf=0.0)
+
+    peak = float(np.max(np.abs(audio)))
+    if peak <= 1e-8:
+        raise ValueError("Generated audio is silent.")
+
+    if peak > 0.98:
+        audio = audio * (0.98 / peak)
+
+    rms = float(np.sqrt(np.mean(audio * audio)))
+    target_rms = 0.12
+    if 1e-8 < rms < target_rms:
+        audio = audio * (target_rms / rms)
+        post_peak = float(np.max(np.abs(audio)))
+        if post_peak > 0.98:
+            audio = audio * (0.98 / post_peak)
+
+    return np.clip(audio, -1.0, 1.0)
 
 
 def estimate_bpm(waveform: np.ndarray, sample_rate: int) -> float | None:
