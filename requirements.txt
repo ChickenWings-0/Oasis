@@ -1,0 +1,45 @@
+# Oasis: AI-Powered Music Generation & Analysis Platform
+# Requirements for GPU-enabled deployment (NVIDIA CUDA 11.8+)
+
+# Core ML Framework (Latest: 2.11.0)
+torch>=2.9.0
+torchvision>=0.16.0
+torchaudio>=2.9.0
+
+# Model Hub & Transformers
+transformers>=4.30.0
+huggingface-hub>=0.19.0
+
+# Audio Processing & Analysis
+librosa>=0.10.0
+scipy>=1.10.0
+soundfile>=0.12.1
+mido>=1.3.0
+pretty_midi>=0.2.10
+pyfluidsynth>=1.3.4
+
+# Image/Vision Processing (Optional - for future features)
+pillow>=10.0.0
+opencv-python>=4.8.0
+numpy>=1.24.0
+
+# Advanced Image Enhancement (Optional - for future features)
+accelerate>=0.20.0
+diffusers>=0.20.0
+
+# Web Interface
+gradio>=4.0.0
+fastapi>=0.100.0
+
+# Utilities
+pydantic>=2.0.0
+pyyaml>=6.0
+tqdm>=4.65.0
+
+# Development & Testing (optional, install with: pip install -r requirements-dev.txt)
+# pytest==7.4.3
+# pytest-cov==4.1.0
+# black==23.12.0
+# flake8==6.1.0
+# mypy==1.7.0
+# pre-commit==3.5.0
