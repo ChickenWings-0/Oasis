@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Model weights / AI assets
+*.ckpt
+*.safetensors
+*.bin
+
+# HuggingFace / torch cache
+.cache/
+~/.cache/
+torch_cache/
+huggingface/
+
+# Outputs (IMPORTANT)
+outputs/
+VideoGenOutputs/
+*.mp4
+*.avi
+*.png
+*.jpg
+
+# Temp files
+tmp/
+temp/
