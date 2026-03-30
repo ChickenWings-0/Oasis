@@ -2,7 +2,7 @@
 Merge Routes - Endpoints for managing merges
 
 REST API for CRUD operations on merges.
-All routes require authentication via JWT or X-User-ID header.
+All routes require authentication via JWT.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -42,7 +42,7 @@ async def merge_branches(
         service = MergeService(db)
         
         merge = service.merge_branches(
-            user_id=current_user.user_id,
+            user_id=current_user.id,
             source_branch_id=request_body["source_branch_id"],
             target_branch_id=request_body["target_branch_id"]
         )
@@ -152,7 +152,7 @@ async def approve_merge(
     """
     try:
         service = MergeService(db)
-        merge = service.approve_merge(merge_id, current_user.user_id)
+        merge = service.approve_merge(merge_id, current_user.id)
         return merge
     except NotFoundError as e:
         raise HTTPException(

@@ -96,6 +96,7 @@ class GoogleAuthService:
         db.refresh(user)
 
         token_data = {
+            "sub": str(user.id),
             "user_id": user.id,
             "email": user.email,
             "username": user.username,

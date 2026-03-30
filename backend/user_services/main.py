@@ -3,10 +3,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.user_services.database import engine, Base
 from backend.user_services.models import User
+from backend.user_services.friends.friend_model import Friendship
 from backend.user_services.registration.reg_routes import router as registration_router
 from backend.user_services.login.log_routes import router as login_router
 from backend.user_services.login.google_routes import router as google_login_router
 from backend.user_services.profiles.prof_routes import router as profile_router
+from backend.user_services.friends.friend_routes import router as friends_router
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -45,6 +47,7 @@ app.include_router(registration_router)
 app.include_router(login_router)
 app.include_router(google_login_router)
 app.include_router(profile_router)
+app.include_router(friends_router)
 
 # Health check endpoint
 @app.get(

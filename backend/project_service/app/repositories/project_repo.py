@@ -18,7 +18,8 @@ class ProjectRepository:
         db_project = Project(
             name=project_data.name,
             description=project_data.description,
-            owner_id=project_data.owner_id
+            owner_id=project_data.owner_id,
+            team_id=project_data.team_id,
         )
         self.db.add(db_project)
         self.db.commit()
@@ -52,7 +53,7 @@ class ProjectRepository:
             return None
         
         for key, value in updates.items():
-            if value is not None and hasattr(project, key):
+            if hasattr(project, key):
                 setattr(project, key, value)
         
         self.db.commit()

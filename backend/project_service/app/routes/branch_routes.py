@@ -2,7 +2,7 @@
 Branch Routes - Endpoints for managing branches
 
 REST API for CRUD operations on branches.
-All routes require authentication via JWT or X-User-ID header.
+All routes require authentication via JWT.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -40,7 +40,7 @@ async def create_branch(
         service = BranchService(db)
         
         branch = service.create_branch(
-            user_id=current_user.user_id,
+            user_id=current_user.id,
             project_id=request_body["project_id"],
             new_branch_name=request_body["name"],
             base_branch_id=request_body.get("base_branch_id")  # Optional parameter

@@ -2,7 +2,7 @@
 Auth Dependency - JWT-based authentication
 
 Handles token validation and user extraction.
-Supports both JWT tokens and dev mode with X-User-ID header.
+Requires JWT tokens via Authorization header.
 """
 
 from fastapi import Depends, HTTPException, Header
@@ -24,7 +24,7 @@ class UserClaims(BaseModel):
 class CurrentUser:
     """Current authenticated user"""
     def __init__(self, user_id: int, email: Optional[str] = None):
-        self.user_id = user_id
+        self.id = user_id
         self.email = email or f"user{user_id}@example.com"
 
 
@@ -54,13 +54,21 @@ def verify_token(token: str) -> UserClaims:
     """
     try:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
-        user_id = payload.get("user_id")
+        raw_user_id = payload.get("user_id") or payload.get("sub")
         email = payload.get("email")
         
-        if not user_id:
+        if raw_user_id is None:
             raise HTTPException(
                 status_code=401,
-                detail="Invalid token: missing user_id"
+                detail="Invalid token: missing user identifier"
+            )
+
+        try:
+            user_id = int(raw_user_id)
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid token: invalid user identifier"
             )
         
         return UserClaims(user_id=user_id, email=email)
@@ -70,48 +78,38 @@ def verify_token(token: str) -> UserClaims:
             status_code=401,
             detail="Token expired"
         )
-    except jwt.InvalidTokenError as e:
+    except jwt.InvalidTokenError:
         raise HTTPException(
             status_code=401,
-            detail=f"Invalid token: {str(e)}"
+            detail="Invalid token"
         )
 
 
 async def get_current_user(
-    authorization: Optional[str] = Header(None),
-    x_user_id: Optional[int] = Header(None)
+    authorization: Optional[str] = Header(None)
 ) -> CurrentUser:
     """
-    Get current user from JWT token or dev header.
-    
-    Priority:
-    1. Authorization: Bearer <token> (production)
-    2. X-User-ID header (development/testing)
-    
+    Get current user from JWT token.
     """
-    # Try JWT token first
-    if authorization:
-        try:
-            # Extract token from "Bearer <token>"
-            scheme, token = authorization.split()
-            if scheme.lower() != "bearer":
-                raise ValueError("Invalid auth scheme")
-            
-            claims = verify_token(token)
-            return CurrentUser(user_id=claims.user_id, email=claims.email)
-        
-        except ValueError as e:
-            raise HTTPException(
-                status_code=401,
-                detail=f"Invalid authorization header: {str(e)}"
-            )
-    
-    # Fallback to dev mode header
-    if x_user_id is not None:
-        return CurrentUser(user_id=x_user_id)
-    
-    # No auth found
-    raise HTTPException(
-        status_code=401,
-        detail="Not authenticated. Provide 'Authorization: Bearer <token>' header or 'X-User-ID' header."
-    )
+    if not authorization:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated. Provide 'Authorization: Bearer <token>' header."
+        )
+
+    try:
+        scheme, token = authorization.split(maxsplit=1)
+    except ValueError:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid authorization header format"
+        )
+
+    if scheme.lower() != "bearer":
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid authentication scheme"
+        )
+
+    claims = verify_token(token)
+    return CurrentUser(user_id=claims.user_id, email=claims.email)

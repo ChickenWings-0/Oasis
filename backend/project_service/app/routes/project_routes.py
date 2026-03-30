@@ -2,7 +2,7 @@
 Project Routes - Endpoints for managing projects
 
 REST API for CRUD operations on projects.
-All routes require authentication via JWT or X-User-ID header.
+All routes require authentication via JWT.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -40,15 +40,25 @@ async def create_project(
     """
     try:
         # Remove owner_id from incoming data, set to current user
-        project_data.owner_id = current_user.user_id
+        project_data.owner_id = current_user.id
         
         service = ProjectService(db)
-        project = service.create_project(current_user.user_id, project_data)
+        project = service.create_project(current_user.id, project_data)
         
         return project
     except ValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
+            detail=e.message
+        )
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=e.message
+        )
+    except ForbiddenError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
             detail=e.message
         )
     except Exception as e:
@@ -77,7 +87,7 @@ async def get_user_projects(
     """
     try:
         service = ProjectService(db)
-        projects = service.list_user_projects(current_user.user_id, skip=skip, limit=limit)
+        projects = service.list_user_projects(current_user.id, skip=skip, limit=limit)
         return projects
     except Exception as e:
         raise HTTPException(
@@ -104,7 +114,7 @@ async def get_project(
     """
     try:
         service = ProjectService(db)
-        project = service.get_project(current_user.user_id, project_id)
+        project = service.get_project(current_user.id, project_id)
         return project
     except NotFoundError as e:
         raise HTTPException(
@@ -142,7 +152,7 @@ async def update_project(
     """
     try:
         service = ProjectService(db)
-        project = service.update_project(current_user.user_id, project_id, project_data)
+        project = service.update_project(current_user.id, project_id, project_data)
         return project
     except NotFoundError as e:
         raise HTTPException(
@@ -183,7 +193,7 @@ async def delete_project(
     """
     try:
         service = ProjectService(db)
-        success = service.delete_project(current_user.user_id, project_id)
+        success = service.delete_project(current_user.id, project_id)
         
         if not success:
             raise HTTPException(

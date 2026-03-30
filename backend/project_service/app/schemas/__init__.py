@@ -2,6 +2,7 @@ from .project_schema import ProjectCreate, ProjectUpdate, ProjectResponse, Proje
 from .branch_schema import BranchCreate, BranchUpdate, BranchResponse, BranchDetail
 from .commit_schema import CommitCreate, CommitResponse, CommitDetail
 from .merge_schema import MergeCreate, MergeUpdate, MergeResponse, MergeDetail
+from .team_schema import TeamCreate, TeamResponse, TeamInviteCreate, TeamInviteResponse, TeamMemberResponse
 
 __all__ = [
     # Project
@@ -23,4 +24,10 @@ __all__ = [
     "MergeUpdate",
     "MergeResponse",
     "MergeDetail",
+    # Team
+    "TeamCreate",
+    "TeamResponse",
+    "TeamInviteCreate",
+    "TeamInviteResponse",
+    "TeamMemberResponse",
 ]

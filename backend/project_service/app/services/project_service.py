@@ -1,9 +1,11 @@
 from sqlalchemy.orm import Session
 from ..models import Project
 from ..schemas import ProjectCreate
-from ..repositories import ProjectRepository, BranchRepository
+from ..repositories import ProjectRepository, BranchRepository, TeamRepository
 from ..schemas import BranchCreate
 from ..exceptions import ForbiddenError, NotFoundError, ValidationError
+from .access_control import has_project_access
+from ..models import TeamRole
 
 
 class ProjectService:
@@ -21,6 +23,7 @@ class ProjectService:
         self.db = db
         self.project_repo = ProjectRepository(db)
         self.branch_repo = BranchRepository(db)
+        self.team_repo = TeamRepository(db)
 
     def create_project(self, user_id: int, project_data: ProjectCreate) -> Project:
         """
@@ -40,12 +43,25 @@ class ProjectService:
         
         if len(project_data.name) > 255:
             raise ValidationError("Project name must be <= 255 characters")
+
+        team_id = project_data.team_id
+        if team_id is not None:
+            team = self.team_repo.get_team_by_id(team_id)
+            if not team:
+                raise NotFoundError(f"Team {team_id} not found")
+
+            if team.owner_id != user_id:
+                membership = self.team_repo.get_member(team_id=team_id, user_id=user_id)
+                allowed_roles = {TeamRole.OWNER, TeamRole.ADMIN}
+                if not membership or membership.role not in allowed_roles:
+                    raise ForbiddenError("Only team owner or admin can create projects for this team")
         
         # Create project (ownership set to user_id from auth)
         project_create = ProjectCreate(
             name=project_data.name,
             description=project_data.description,
-            owner_id=user_id
+            owner_id=user_id,
+            team_id=team_id,
         )
         project = self.project_repo.create_project(project_create)
         
@@ -78,9 +94,9 @@ class ProjectService:
         if not project:
             raise NotFoundError(f"Project {project_id} not found")
         
-        # AUTHORIZATION CHECK: Verify ownership
-        if project.owner_id != user_id:
-            raise ForbiddenError(f"You do not own project {project_id}")
+        # AUTHORIZATION CHECK: owner or project team member
+        if not has_project_access(user_id, project, self.db):
+            raise ForbiddenError(f"You do not have access to project {project_id}")
         
         return project
 
@@ -107,8 +123,13 @@ class ProjectService:
         - NotFoundError: Project doesn't exist
         - ForbiddenError: User is not the owner
         """
-        # This internally checks authorization (calls get_project which verifies ownership)
-        project = self.get_project(user_id, project_id)
+        project = self.project_repo.get_project_by_id(project_id)
+        if not project:
+            raise NotFoundError(f"Project {project_id} not found")
+
+        # Delete remains owner-only
+        if not has_project_access(user_id, project, self.db, require_role="owner"):
+            raise ForbiddenError(f"Only the project owner can delete project {project_id}")
         
         return self.project_repo.delete_project(project_id)
 
@@ -127,8 +148,14 @@ class ProjectService:
         - NotFoundError: Project doesn't exist
         - ForbiddenError: User is not the owner
         """
-        # Verify ownership
+        # Verify access to project
         project = self.get_project(user_id, project_id)
+
+        fields_set = getattr(project_data, "model_fields_set", None)
+        if fields_set is None:
+            fields_set = getattr(project_data, "__fields_set__", set())
+
+        team_id_in_payload = "team_id" in fields_set
         
         # Update only provided fields
         updates = {}
@@ -143,6 +170,28 @@ class ProjectService:
             if len(project_data.description) > 2000:
                 raise ValidationError("Project description must be <= 2000 characters")
             updates['description'] = project_data.description
+
+        # Team reassignment rules to prevent privilege escalation
+        if team_id_in_payload and project_data.team_id != project.team_id:
+            if project_data.team_id is None:
+                # Removing team assignment is owner-only
+                if project.owner_id != user_id:
+                    raise ForbiddenError("Only the project owner can remove team assignment")
+                updates['team_id'] = None
+            else:
+                target_team_id = project_data.team_id
+                team = self.team_repo.get_team_by_id(target_team_id)
+                if not team:
+                    raise NotFoundError(f"Team {target_team_id} not found")
+
+                # User must be owner/admin in the target team
+                if team.owner_id != user_id:
+                    membership = self.team_repo.get_member(team_id=target_team_id, user_id=user_id)
+                    allowed_roles = {TeamRole.OWNER, TeamRole.ADMIN}
+                    if not membership or membership.role not in allowed_roles:
+                        raise ForbiddenError("Only team owner or admin can assign this project to the target team")
+
+                updates['team_id'] = target_team_id
         
         # Apply updates if any
         if updates:

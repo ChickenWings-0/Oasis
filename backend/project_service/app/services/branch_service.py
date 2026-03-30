@@ -3,6 +3,7 @@ from ..models import Branch, Project
 from ..schemas import BranchCreate
 from ..repositories import BranchRepository, ProjectRepository
 from ..exceptions import ForbiddenError, NotFoundError, ValidationError
+from .access_control import has_project_access
 
 
 class BranchService:
@@ -23,9 +24,9 @@ class BranchService:
         if not project:
             raise NotFoundError(f"Project {project_id} not found")
         
-        # AUTHORIZATION CHECK: Verify project ownership
-        if project.owner_id != user_id:
-            raise ForbiddenError(f"You do not own project {project_id}")
+        # AUTHORIZATION CHECK: owner or project team member
+        if not has_project_access(user_id, project, self.db):
+            raise ForbiddenError(f"You do not have access to project {project_id}")
         
         # If base_branch_id not provided, auto-select main branch
         if base_branch_id is None:

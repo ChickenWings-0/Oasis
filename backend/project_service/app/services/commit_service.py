@@ -5,6 +5,7 @@ from ..models import Commit, Branch
 from ..schemas import CommitCreate
 from ..repositories import CommitRepository, BranchRepository, ProjectRepository
 from ..exceptions import ForbiddenError, NotFoundError, ValidationError
+from .access_control import has_project_access
 
 
 class CommitService:
@@ -51,10 +52,12 @@ class CommitService:
         if not branch:
             raise NotFoundError(f"Branch {branch_id} not found")
         
-        # AUTHORIZATION CHECK: Verify user owns the project
+        # AUTHORIZATION CHECK: owner or project team member
         project = self.project_repo.get_project_by_id(branch.project_id)
-        if not project or project.owner_id != user_id:
-            raise ForbiddenError(f"You do not own the project containing branch {branch_id}")
+        if not project:
+            raise NotFoundError(f"Project {branch.project_id} not found")
+        if not has_project_access(user_id, project, self.db):
+            raise ForbiddenError(f"You do not have access to the project containing branch {branch_id}")
         
         # Validate message
         if not message or len(message.strip()) == 0:

@@ -5,6 +5,7 @@ from ..schemas import MergeCreate
 from ..repositories import MergeRepository, BranchRepository, CommitRepository, ProjectRepository
 from .commit_service import CommitService
 from ..exceptions import ForbiddenError, NotFoundError, ValidationError
+from .access_control import has_project_access
 
 
 class MergeService:
@@ -59,10 +60,12 @@ class MergeService:
         if source.project_id != target.project_id:
             raise ValidationError("Cannot merge branches from different projects")
         
-        # AUTHORIZATION CHECK: Verify project ownership
+        # AUTHORIZATION CHECK: owner or project team member
         project = self.project_repo.get_project_by_id(source.project_id)
-        if not project or project.owner_id != user_id:
-            raise ForbiddenError(f"You do not own the project containing these branches")
+        if not project:
+            raise NotFoundError(f"Project {source.project_id} not found")
+        if not has_project_access(user_id, project, self.db):
+            raise ForbiddenError("You do not have access to the project containing these branches")
         
         # Verify not same branch
         if source_branch_id == target_branch_id:
@@ -250,10 +253,12 @@ class MergeService:
         if not target_branch:
             raise NotFoundError(f"Target branch not found")
         
-        # AUTHORIZATION: Verify user owns project
+        # AUTHORIZATION: owner or project team member
         project = self.project_repo.get_project_by_id(target_branch.project_id)
-        if not project or project.owner_id != user_id:
-            raise ForbiddenError("You do not own the project containing this merge")
+        if not project:
+            raise NotFoundError(f"Project {target_branch.project_id} not found")
+        if not has_project_access(user_id, project, self.db):
+            raise ForbiddenError("You do not have access to the project containing this merge")
         
         # For now, just update status to indicate approval
         # In a real system, this would track approvals separately

@@ -8,13 +8,15 @@ class ProjectCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, description="Project name")
     description: Optional[str] = Field(None, max_length=2000, description="Project description")
     owner_id: Optional[int] = Field(None, description="User ID of project owner (auto-set from JWT)")
+    team_id: Optional[int] = Field(None, gt=0, description="Optional team ID for collaborative project")
 
     class Config:
         json_schema_extra = {
             "example": {
                 "name": "AI Content Creator",
                 "description": "Platform for AI-powered content creation",
-                "owner_id": 1
+                "owner_id": 1,
+                "team_id": 3
             }
         }
 
@@ -23,12 +25,14 @@ class ProjectUpdate(BaseModel):
     """Schema for updating a project"""
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=2000)
+    team_id: Optional[int] = Field(None, gt=0)
 
     class Config:
         json_schema_extra = {
             "example": {
                 "name": "Updated Project Name",
-                "description": "Updated description"
+                "description": "Updated description",
+                "team_id": 3
             }
         }
 
@@ -39,6 +43,7 @@ class ProjectResponse(BaseModel):
     name: str
     description: Optional[str]
     owner_id: int
+    team_id: Optional[int]
     created_at: datetime
 
     class Config:
@@ -49,6 +54,7 @@ class ProjectResponse(BaseModel):
                 "name": "AI Content Creator",
                 "description": "Platform for AI-powered content creation",
                 "owner_id": 1,
+                "team_id": 3,
                 "created_at": "2026-03-21T20:00:00"
             }
         }

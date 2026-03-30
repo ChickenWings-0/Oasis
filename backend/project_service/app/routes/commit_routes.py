@@ -2,7 +2,7 @@
 Commit Routes - Endpoints for managing commits
 
 REST API for CRUD operations on commits.
-All routes require authentication via JWT or X-User-ID header.
+All routes require authentication via JWT.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -54,10 +54,10 @@ async def create_commit(
         service = CommitService(db)
         
         commit = service.create_commit(
-            user_id=current_user.user_id,
+            user_id=current_user.id,
             branch_id=request_body["branch_id"],
             message=request_body["message"],
-            author_id=current_user.user_id
+            author_id=current_user.id
         )
         
         return commit

@@ -45,6 +45,7 @@ class LoginService:
         
         # Create JWT token
         token_data = {
+            "sub": str(user.id),
             "user_id": user.id,
             "email": user.email,
             "username": user.username
